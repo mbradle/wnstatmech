@@ -23,4 +23,4 @@ jobs:
           pip install -e .
       - name: run test
         run: |
-          pytest -v .github/workflows/wnnet_test.py
+          pytest -v .github/workflows/wnstatmech_test.py
