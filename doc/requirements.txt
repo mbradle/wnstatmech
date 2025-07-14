@@ -1,0 +1,8 @@
+lxml
+wnutils
+networkx
+gslconsts
+scipy
+dataclasses
+sphinx_rtd_theme
+#readthedocs-sphinx-search==0.1.1
