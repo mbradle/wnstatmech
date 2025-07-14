@@ -1,6 +1,7 @@
 """This is the module that handles bosons."""
 
 import math
+import gslconsts.consts as gc
 import wnstatmech.base as wbst
 
 
@@ -34,33 +35,41 @@ class Boson(wbst.Particle):
             )
         except ValueError:
             f = 0.0
-        return f * self._prefactor(temperature, power=4)
+        return -f * self._prefactor(temperature, power=4)
 
     def energy_density_integrand(self, x, temperature, alpha):
         gamma = self.get_gamma(temperature)
         denom = self._safe_expm1(x - alpha)
         if denom == 0:
             return 0.0
-        nd_plus = math.sqrt(x**2 + 2 * x * gamma) * (x + gamma)
+        nd_plus = ((x + gamma) ** 2) * math.sqrt(x**2 + 2 * x * gamma)
         f = nd_plus / denom
         return f * self._prefactor(temperature, power=4)
 
     def entropy_density_integrand(self, x, temperature, alpha):
         gamma = self.get_gamma(temperature)
-        a = alpha - x
         f = (
             math.sqrt(x**2 + 2 * x * gamma)
             * (x + gamma)
-            * safe_entropy_term_boson(a)
+            * (
+                math.log1p(-self._safe_exp(alpha - x))
+                + (alpha - x) / (1.0 + self._safe_exp(x - alpha))
+            )
         )
-        return f * self._prefactor(temperature, power=3)
+        return (
+            -gc.GSL_CONST_CGSM_BOLTZMANN
+            * self._prefactor(temperature, power=3)
+            * f
+        )
 
     def internal_energy_density_integrand(self, x, temperature, alpha):
-        return self.energy_density_integrand(
-            x, temperature, alpha
-        ) - self.get_rest_mass_cgs() * self.number_density_integrand(
-            x, temperature, alpha
-        )
+        gamma = self.get_gamma(temperature)
+        denom = self._safe_expm1(x - alpha)
+        if denom == 0:
+            return 0.0
+        nd_plus = x * (x + gamma) * math.sqrt(x**2 + 2 * x * gamma)
+        f = nd_plus / denom
+        return f * self._prefactor(temperature, power=4)
 
     def compute_chemical_potential(self, temperature, number_density):
         return self._compute_chemical_potential(
@@ -93,3 +102,6 @@ class Boson(wbst.Particle):
         """
 
         self.integrands[quantity] = integrand_fn
+
+def create_photon():
+    return Boson("photon", 0, 2, 0)

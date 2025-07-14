@@ -27,17 +27,6 @@ def _bracket_root(f, x0, args=()):
     return None
 
 
-def safe_entropy_term_boson(a):
-    try:
-        exp_a = safe_exp(a)
-        denom = exp_a - 1
-        if abs(denom) < 1e-12:
-            return 0.0
-        return a / denom - math.log1p(-exp_a)
-    except:
-        return 0.0
-
-
 class Particle:
     def __init__(self, name, rest_mass_mev, multiplicity, charge):
         if rest_mass_mev < 0 or multiplicity <= 0:

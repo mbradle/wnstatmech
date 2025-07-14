@@ -80,37 +80,35 @@ class Fermion(wbst.Particle):
 
     def energy_density_integrand(self, x, temperature, alpha):
         gamma = self.get_gamma(temperature)
-        nd_plus = math.sqrt(x**2 + 2 * x * gamma) * (x + gamma)
+        nd_plus = ((x + gamma) ** 2) * math.sqrt(x**2 + 2 * x * gamma)
         part1 = 1 / (self._safe_exp(x - alpha) + 1)
         part2 = 1 / (self._safe_exp(x + 2 * gamma + alpha) + 1)
         f = nd_plus * (part1 + part2)
         return f * self._prefactor(temperature, power=4)
 
     def entropy_density_integrand(self, x, temperature, alpha):
+        def s_part(y):
+            return (y / (1.0 + self._safe_exp(y))) + math.log1p(self._safe_exp(-y))
+
         gamma = self.get_gamma(temperature)
-        a = alpha - x
-        b = -x - 2 * gamma - alpha
-        if a > 0:
-            part1 = a / (self._safe_exp(a) + 1) + math.log1p(
-                self._safe_exp(-a)
-            )
-        else:
-            part1 = a / (self._safe_exp(a) + 1) + math.log1p(self._safe_exp(a))
-        if b > 0:
-            part2 = b / (self._safe_exp(b) + 1) + math.log1p(
-                self._safe_exp(-b)
-            )
-        else:
-            part2 = b / (self._safe_exp(b) + 1) + math.log1p(self._safe_exp(b))
-        f = math.sqrt(x**2 + 2 * x * gamma) * (x + gamma) * (part1 - part2)
-        return f * self._prefactor(temperature, power=3)
+        f = (
+            math.sqrt(x**2 + 2 * x * gamma)
+            * (x + gamma)
+            * (s_part(x - alpha) + s_part(x + 2 * gamma + alpha))
+        )
+        return (
+            gc.GSL_CONST_CGSM_BOLTZMANN
+            * self._prefactor(temperature, power=3)
+            * f
+        )
 
     def internal_energy_density_integrand(self, x, temperature, alpha):
-        return self.energy_density_integrand(
-            x, temperature, alpha
-        ) - self.get_rest_mass_cgs() * self.number_density_integrand(
-            x, temperature, alpha
-        )
+        gamma = self.get_gamma(temperature)
+        nd_plus = (x * (x + gamma)) * math.sqrt(x**2 + 2 * x * gamma)
+        part1 = 1 / (self._safe_exp(x - alpha) + 1)
+        part2 = 1 / (self._safe_exp(x + 2 * gamma + alpha) + 1)
+        f = nd_plus * (part1 + part2)
+        return f * self._prefactor(temperature, power=4)
 
     def compute_chemical_potential(self, temperature, number_density):
         return self._compute_chemical_potential(
@@ -134,7 +132,7 @@ class Fermion(wbst.Particle):
             ``quantity`` (:obj:`str`): The name of the quantity.
 
             ``integrand_fn`` (:obj:`float`): The integrand corresponding to the \
-            quanity.  The integrand function must take three arguments.  The first \
+            quantity.  The integrand function must take three arguments.  The first \
             is the scaled energy *x*, the second is *T*, the temperature  in Kelvin, \
             and the third is the *alpha*, the chemical potential (less the rest mass) \
             divided by kT.  Other data can be bound to the integrand function.

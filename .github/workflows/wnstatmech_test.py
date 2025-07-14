@@ -18,7 +18,7 @@ def test_alpha():
 def test_fermion_quantities():
     electron = ws.fermion.create_electron()
 
-    Ts = np.logspace(3, 12, 10)
+    Ts = np.logspace(0, 12, 13)
     alphas = np.linspace(-10, 10, 21) 
 
     for T in Ts:
@@ -29,5 +29,22 @@ def test_fermion_quantities():
             assert e_fermion > 0
             ei_fermion = electron.compute_quantity("internal energy density", T, alpha)
             assert ei_fermion
-            #s_fermion = electron.compute_quantity("entropy density", T, alpha)
-            #assert s_fermion > 0
+            s_fermion = electron.compute_quantity("entropy density", T, alpha)
+            assert s_fermion > 0
+
+def test_photon_quantities():
+    photon = ws.boson.create_photon()
+
+    Ts = np.logspace(0, 12, 13)
+
+    for T in Ts:
+        n_photon = photon.compute_quantity("number density", T, 0)
+        assert n_photon > 0
+        p_photon = photon.compute_quantity("pressure", T, 0)
+        assert p_photon > 0
+        e_photon = photon.compute_quantity("energy density", T, 0)
+        assert e_photon > 0
+        ei_photon = photon.compute_quantity("internal energy density", T, 0)
+        assert ei_photon > 0
+        s_photon = photon.compute_quantity("entropy density", T, 0)
+        assert s_photon > 0
