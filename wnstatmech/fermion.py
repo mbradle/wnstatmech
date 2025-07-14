@@ -88,7 +88,9 @@ class Fermion(wbst.Particle):
 
     def entropy_density_integrand(self, x, temperature, alpha):
         def s_part(y):
-            return (y / (1.0 + self._safe_exp(y))) + math.log1p(self._safe_exp(-y))
+            return (y / (1.0 + self._safe_exp(y))) + math.log1p(
+                self._safe_exp(-y)
+            )
 
         gamma = self.get_gamma(temperature)
         f = (

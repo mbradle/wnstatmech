@@ -103,5 +103,6 @@ class Boson(wbst.Particle):
 
         self.integrands[quantity] = integrand_fn
 
+
 def create_photon():
     return Boson("photon", 0, 2, 0)
