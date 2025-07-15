@@ -15,7 +15,7 @@ def test_alpha():
             mu_fermion = electron.compute_chemical_potential(T, n_fermion)
             assert np.isclose(alpha, mu_fermion, atol=1.0e-8)
 
-def test_fermion_quantities():
+def test_electron_quantities():
     electron = ws.fermion.create_electron()
 
     Ts = np.logspace(0, 12, 13)
@@ -44,6 +44,7 @@ def test_photon_quantities():
         assert p_photon > 0
         e_photon = photon.compute_quantity("energy density", T, 0)
         assert e_photon > 0
+        assert np.isclose(p_photon, e_photon / 3, 1.e-8)
         ei_photon = photon.compute_quantity("internal energy density", T, 0)
         assert ei_photon > 0
         s_photon = photon.compute_quantity("entropy density", T, 0)

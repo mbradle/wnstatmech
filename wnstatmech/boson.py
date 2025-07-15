@@ -6,6 +6,20 @@ import wnstatmech.base as wbst
 
 
 class Boson(wbst.Particle):
+    """A class for boson.
+
+    Args:
+        ``name`` (:obj:`str`): The name of the boson.
+
+        ``rest_mass_mev`` (:obj:`float`): The rest mass energy of the boson (in MeV).
+
+        ``multiplicity`` (:obj:`int`):  The multiplicity of the internal degrees of
+        freedom of the boson (typically 2 times the spin plus one).
+
+        ``charge`` (:obj:`int`):  The charge of the boson.
+
+    """
+
     def __init__(self, name, rest_mass_mev, multiplicity, charge):
         super().__init__(name, rest_mass_mev, multiplicity, charge)
 

@@ -28,6 +28,20 @@ def _bracket_root(f, x0, args=()):
 
 
 class Particle:
+    """A class for base particles.
+
+    Args:
+        ``name`` (:obj:`str`): The name of the particle.
+
+        ``rest_mass_mev`` (:obj:`float`): The rest mass energy of the particle (in MeV).
+
+        ``multiplicity`` (:obj:`int`):  The multiplicity of the internal degrees of
+        freedom of the particle (typically 2 times the spin plus one).
+
+        ``charge`` (:obj:`int`):  The charge of the particle.
+
+    """
+
     def __init__(self, name, rest_mass_mev, multiplicity, charge):
         if rest_mass_mev < 0 or multiplicity <= 0:
             raise ValueError("Invalid rest mass or multiplicity.")

@@ -16,7 +16,7 @@ class Fermion(wbst.Particle):
         ``rest_mass_mev`` (:obj:`float`): The rest mass energy of the fermion (in MeV).
 
         ``multiplicity`` (:obj:`int`):  The multiplicity of the internal degrees of
-        freedom of the fermion (2 times the spin plus one).
+        freedom of the fermion (typically 2 times the spin plus one).
 
         ``charge`` (:obj:`int`):  The charge of the fermion.
 
@@ -34,15 +34,19 @@ class Fermion(wbst.Particle):
         }
 
     def number_density_integrand(self, x, temperature, alpha):
-        """A class for fermions.
+        """The default number density integrand.
 
         Args:
             ``x`` (:obj:`float`): The argument of the integrand.
 
-            ``temperature`` (:obj:`float`): The temperature (in K) at which to compute the
-              integrand.
+            ``temperature`` (:obj:`float`): The temperature (in K) at which to compute
+            the integrand.
 
             ``alpha`` (:obj:`float`):  The chemical potential (less the rest mass) divided by kT.
+
+        Returns:
+            A :obj:`float` giving the net number density integrand
+            (fermions minus anti-fermions) in cgs units for the given input.
 
         """
         gamma = self.get_gamma(temperature)
@@ -61,6 +65,21 @@ class Fermion(wbst.Particle):
         return f * self._prefactor(temperature, power=3)
 
     def pressure_integrand(self, x, temperature, alpha):
+        """The default pressure integrand.
+
+        Args:
+            ``x`` (:obj:`float`): The argument of the integrand.
+
+            ``temperature`` (:obj:`float`): The temperature (in K) at which to compute the
+            integrand.
+
+            ``alpha`` (:obj:`float`):  The chemical potential (less the rest mass) divided by kT.
+
+        Returns:
+            A :obj:`float` giving the pressure integrand for the fermions
+            (plus anti-fermions) in cgs units for the given input.
+
+        """
         gamma = self.get_gamma(temperature)
         if alpha - x <= 0:
             part1 = math.log1p(self._safe_exp(alpha - x))
@@ -79,6 +98,21 @@ class Fermion(wbst.Particle):
         return f * self._prefactor(temperature, power=4)
 
     def energy_density_integrand(self, x, temperature, alpha):
+        """The default energy density integrand.
+
+        Args:
+            ``x`` (:obj:`float`): The argument of the integrand.
+
+            ``temperature`` (:obj:`float`): The temperature (in K) at which to compute the
+            integrand.
+
+            ``alpha`` (:obj:`float`):  The chemical potential (less the rest mass) divided by kT.
+
+        Returns:
+            A :obj:`float` giving the energy density integrand for the fermions
+            (plus anti-fermions) in cgs units for the given input.
+
+        """
         gamma = self.get_gamma(temperature)
         nd_plus = ((x + gamma) ** 2) * math.sqrt(x**2 + 2 * x * gamma)
         part1 = 1 / (self._safe_exp(x - alpha) + 1)
@@ -87,6 +121,22 @@ class Fermion(wbst.Particle):
         return f * self._prefactor(temperature, power=4)
 
     def entropy_density_integrand(self, x, temperature, alpha):
+        """The default entropy density integrand.
+
+        Args:
+            ``x`` (:obj:`float`): The argument of the integrand.
+
+            ``temperature`` (:obj:`float`): The temperature (in K) at which to compute the
+            integrand.
+
+            ``alpha`` (:obj:`float`):  The chemical potential (less the rest mass) divided by kT.
+
+        Returns:
+            A :obj:`float` giving the entropy density integrand for the fermions
+            (plus anti-fermions) in cgs units for the given input.
+
+        """
+
         def s_part(y):
             return (y / (1.0 + self._safe_exp(y))) + math.log1p(
                 self._safe_exp(-y)
@@ -105,6 +155,21 @@ class Fermion(wbst.Particle):
         )
 
     def internal_energy_density_integrand(self, x, temperature, alpha):
+        """The default internal energy density integrand.
+
+        Args:
+            ``x`` (:obj:`float`): The argument of the integrand.
+
+            ``temperature`` (:obj:`float`): The temperature (in K) at which to compute the
+            integrand.
+
+            ``alpha`` (:obj:`float`):  The chemical potential (less the rest mass) divided by kT.
+
+        Returns:
+            A :obj:`float` giving the internal energy density integrand for the fermions
+            (plus anti-fermions) in cgs units for the given input.
+
+        """
         gamma = self.get_gamma(temperature)
         nd_plus = (x * (x + gamma)) * math.sqrt(x**2 + 2 * x * gamma)
         part1 = 1 / (self._safe_exp(x - alpha) + 1)
@@ -118,11 +183,17 @@ class Fermion(wbst.Particle):
         )
 
     def compute_quantity(self, quantity, temperature, alpha):
+        assert (
+            quantity in self.integrands
+        ), "Integrand not specified for quantity."
         return self._compute_quantity(
             self.integrands[quantity], temperature, alpha
         )
 
     def compute_temperature_derivative(self, quantity, temperature, alpha):
+        assert (
+            quantity in self.integrands
+        ), "Integrand not specified for quantity."
         return self._compute_temperature_derivative(
             self.integrands[quantity], temperature, alpha
         )
