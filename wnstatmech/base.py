@@ -187,7 +187,7 @@ class Particle:
         ).df
 
     def update_functions(self, quantity, func):
-        """A method to update the integrands for the particle.
+        """A method to update the functions for the particle.
 
         Args:
             ``quantity`` (:obj:`str`): The name of the quantity.

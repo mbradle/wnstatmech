@@ -50,7 +50,23 @@ class Fermion(wbst.Particle):
         )
 
     def default_number_density_function(self, temperature, alpha):
-        if self.get_rest_mass_cgs == 0:
+        """The default number density function to treat case of zero-rest-mass fermion.
+
+        Args:
+            ``temperature`` (:obj:`float`): The temperature (in K) at which to compute
+            the function.
+
+            ``alpha`` (:obj:`float`):  The chemical potential (less the rest mass) divided by kT.
+
+        Returns:
+            A :obj:`float` giving the net number density
+            (fermions minus anti-fermions) in cgs units for the given input
+            for the case when the rest mass is zero.  When it is not zero,
+            the routine returns None so that other routines will compute the
+            number density by integration. 
+
+        """
+        if self.get_rest_mass_cgs() == 0:
             return self._prefactor(temperature, power=3) * (
                 gm.M_PI**3 * alpha / 3.0 + alpha**3 / 3.0
             )
