@@ -23,15 +23,38 @@ class Boson(wbst.Particle):
     def __init__(self, name, rest_mass_mev, multiplicity, charge):
         super().__init__(name, rest_mass_mev, multiplicity, charge)
 
-        self.integrands = {
-            "number density": self.number_density_integrand,
-            "pressure": self.pressure_integrand,
-            "energy density": self.energy_density_integrand,
-            "entropy density": self.entropy_density_integrand,
-            "internal energy density": self.internal_energy_density_integrand,
-        }
+        self.update_functions("number density", None)
+        self.update_functions("pressure", None)
+        self.update_functions("energy density", None)
+        self.update_functions("internal energy density", None)
+        self.update_functions("entropy density", None)
+
+        self.update_integrands("number density", self.number_density_integrand)
+        self.update_integrands("pressure", self.pressure_integrand)
+        self.update_integrands("energy density", self.energy_density_integrand)
+        self.update_integrands(
+            "entropy density", self.entropy_density_integrand
+        )
+        self.update_integrands(
+            "internal energy density", self.internal_energy_density_integrand
+        )
 
     def number_density_integrand(self, x, temperature, alpha):
+        """The default number density integrand.
+
+        Args:
+            ``x`` (:obj:`float`): The argument of the integrand.
+
+            ``temperature`` (:obj:`float`): The temperature (in K) at which to compute
+            the integrand.
+
+            ``alpha`` (:obj:`float`):  The chemical potential (less the rest mass) divided by kT.
+
+        Returns:
+            A :obj:`float` giving the number density integrand in cgs units for the given input.
+
+        """
+
         gamma = self.get_gamma(temperature)
         denom = self._safe_expm1(x - alpha)
         if denom == 0:
@@ -40,6 +63,22 @@ class Boson(wbst.Particle):
         return f * self._prefactor(temperature, power=3)
 
     def pressure_integrand(self, x, temperature, alpha):
+        """The default pressure integrand.
+
+        Args:
+            ``x`` (:obj:`float`): The argument of the integrand.
+
+            ``temperature`` (:obj:`float`): The temperature (in K) at which to compute the
+            integrand.
+
+            ``alpha`` (:obj:`float`):  The chemical potential (less the rest mass) divided by kT.
+
+        Returns:
+            A :obj:`float` giving the pressure integrand for the boson in cgs units
+            for the given input.
+
+        """
+
         gamma = self.get_gamma(temperature)
         try:
             f = (
@@ -52,6 +91,21 @@ class Boson(wbst.Particle):
         return -f * self._prefactor(temperature, power=4)
 
     def energy_density_integrand(self, x, temperature, alpha):
+        """The default energy density integrand.
+
+        Args:
+            ``x`` (:obj:`float`): The argument of the integrand.
+
+            ``temperature`` (:obj:`float`): The temperature (in K) at which to compute the
+            integrand.
+
+            ``alpha`` (:obj:`float`):  The chemical potential (less the rest mass) divided by kT.
+
+        Returns:
+            A :obj:`float` giving the energy density integrand for the boson in cgs units
+            for the given input.
+        """
+
         gamma = self.get_gamma(temperature)
         denom = self._safe_expm1(x - alpha)
         if denom == 0:
@@ -61,13 +115,28 @@ class Boson(wbst.Particle):
         return f * self._prefactor(temperature, power=4)
 
     def entropy_density_integrand(self, x, temperature, alpha):
+        """The default entropy density integrand.
+
+        Args:
+            ``x`` (:obj:`float`): The argument of the integrand.
+
+            ``temperature`` (:obj:`float`): The temperature (in K) at which to compute the
+            integrand.
+
+            ``alpha`` (:obj:`float`):  The chemical potential (less the rest mass) divided by kT.
+
+        Returns:
+            A :obj:`float` giving the entropy density integrand for the boson in cgs units
+            for the given input.
+
+        """
         gamma = self.get_gamma(temperature)
         f = (
             math.sqrt(x**2 + 2 * x * gamma)
             * (x + gamma)
             * (
                 math.log1p(-self._safe_exp(alpha - x))
-                + (alpha - x) / (1.0 + self._safe_exp(x - alpha))
+                + (alpha - x) / (self._safe_expm1(x - alpha))
             )
         )
         return (
@@ -77,6 +146,22 @@ class Boson(wbst.Particle):
         )
 
     def internal_energy_density_integrand(self, x, temperature, alpha):
+        """The default internal energy density integrand.
+
+        Args:
+            ``x`` (:obj:`float`): The argument of the integrand.
+
+            ``temperature`` (:obj:`float`): The temperature (in K) at which to compute the
+            integrand.
+
+            ``alpha`` (:obj:`float`):  The chemical potential (less the rest mass) divided by kT.
+
+        Returns:
+            A :obj:`float` giving the internal energy density integrand for the boson
+            in cgs units for the given input.
+
+        """
+
         gamma = self.get_gamma(temperature)
         denom = self._safe_expm1(x - alpha)
         if denom == 0:
@@ -86,37 +171,83 @@ class Boson(wbst.Particle):
         return f * self._prefactor(temperature, power=4)
 
     def compute_chemical_potential(self, temperature, number_density):
+        """Routine to compute the chemical potential (less the rest mass) divided by kT.
+
+        Args:
+            ``temperature`` (:obj:`float`): The temperature (in K) at which to compute the
+            chemical potential.
+
+            ``number_density`` (:obj:`float`):  The number density (in per cc) at which to
+            compute the chemical potential.
+
+        Returns:
+            A :obj:`float` giving the chemical potential (less the rest mass) divided
+            by kT.
+
+        """
+
         return self._compute_chemical_potential(
+            self.functions["number density"],
             self.integrands["number density"],
             temperature,
             number_density,
         )
 
     def compute_quantity(self, quantity, temperature, alpha):
+        """Routine to compute a thermodynamic quantity for the boson.
+
+        Args:
+            ``quantity`` (:obj:`str`): The name of the quantity to compute.
+
+            ``temperature`` (:obj:`float`): The temperature (in K) at which to compute the
+            quantity.
+
+            ``alpha`` (:obj:`float`):  The chemical potential (less the rest mass)
+            divided by kT at which to compute the quantity.
+
+        Returns:
+            A :obj:`float` giving the quantity in cgs units.
+
+        """
+
         return self._compute_quantity(
-            self.integrands[quantity], temperature, alpha
+            self.functions[quantity],
+            self.integrands[quantity],
+            temperature,
+            alpha,
         )
 
     def compute_temperature_derivative(self, quantity, temperature, alpha):
-        return self._compute_temperature_derivative(
-            self.integrands[quantity], temperature, alpha
-        )
-
-    def update_integrands(self, quantity, integrand_fn):
-        """A method to update the integrands for the boson.
+        """Routine to compute the temperature derivative of a thermodynamic quantity
+        for the boson.
 
         Args:
-            ``quantity`` (:obj:`str`): The name of the quantity.
+            ``quantity`` (:obj:`str`): The name of the quantity to compute.
 
-            ``integrand_fn`` (:obj:`float`): The integrand corresponding to the \
-            quanity.  The integrand function must take three arguments.  The first \
-            is the scaled energy *x*, the second is *T*, the temperature  in Kelvin, \
-            and the third is the *alpha*, the chemical potential (less the rest mass) \
-            divided by kT.  Other data can be bound to the integrand function.
+            ``temperature`` (:obj:`float`): The temperature (in K) at which to compute the
+            derivative.
+
+            ``alpha`` (:obj:`float`):  The chemical potential (less the rest mass)
+            divided by kT at which to compute the derivative.
+
+        Returns:
+            A :obj:`float` giving the temperature derivative of the quantity in cgs units.
+
         """
 
-        self.integrands[quantity] = integrand_fn
+        return self._compute_temperature_derivative(
+            self.functions[quantity],
+            self.integrands[quantity],
+            temperature,
+            alpha,
+        )
 
 
 def create_photon():
+    """Convenience routine for creating a photon.
+
+    Returns:
+        A photon as a :obj:`wnstatmech.boson.Boson` object.
+
+    """
     return Boson("photon", 0, 2, 0)

@@ -2,6 +2,7 @@
 
 import math
 import gslconsts.consts as gc
+import gslconsts.math as gm
 import wnstatmech.base as wbst
 
 D_GAMMA_ALPHA = 1.0e-3
@@ -25,15 +26,37 @@ class Fermion(wbst.Particle):
     def __init__(self, name, rest_mass_mev, multiplicity, charge):
         super().__init__(name, rest_mass_mev, multiplicity, charge)
 
-        self.integrands = {
-            "number density": self.number_density_integrand,
-            "pressure": self.pressure_integrand,
-            "energy density": self.energy_density_integrand,
-            "entropy density": self.entropy_density_integrand,
-            "internal energy density": self.internal_energy_density_integrand,
-        }
+        self.update_functions(
+            "number density", self.default_number_density_function
+        )
+        self.update_functions("pressure", None)
+        self.update_functions("energy density", None)
+        self.update_functions("internal energy density", None)
+        self.update_functions("entropy density", None)
 
-    def number_density_integrand(self, x, temperature, alpha):
+        self.update_integrands(
+            "number density", self.default_number_density_integrand
+        )
+        self.update_integrands("pressure", self.default_pressure_integrand)
+        self.update_integrands(
+            "energy density", self.default_energy_density_integrand
+        )
+        self.update_integrands(
+            "entropy density", self.default_entropy_density_integrand
+        )
+        self.update_integrands(
+            "internal energy density",
+            self.default_internal_energy_density_integrand,
+        )
+
+    def default_number_density_function(self, temperature, alpha):
+        if self.get_rest_mass_cgs == 0:
+            return self._prefactor(temperature, power=3) * (
+                gm.M_PI**3 * alpha / 3.0 + alpha**3 / 3.0
+            )
+        return None
+
+    def default_number_density_integrand(self, x, temperature, alpha):
         """The default number density integrand.
 
         Args:
@@ -49,22 +72,21 @@ class Fermion(wbst.Particle):
             (fermions minus anti-fermions) in cgs units for the given input.
 
         """
+
+        def n_part(y):
+            if y > 0:
+                return self._safe_exp(-y) / (1.0 + self._safe_exp(-y))
+            return 1.0 / (1.0 + self._safe_exp(y))
+
         gamma = self.get_gamma(temperature)
-        part1 = 1 / (self._safe_exp(x - alpha) + 1)
-        part2 = 1 / (self._safe_exp(x + 2 * gamma + alpha) + 1)
-        if abs(gamma + alpha) < D_GAMMA_ALPHA:
-            f = (
-                math.sqrt(x**2 + 2 * x * gamma)
-                * (x + gamma)
-                * self._safe_expm1(2 * (alpha + gamma))
-                * part1
-                * part2
-            )
-        else:
-            f = math.sqrt(x**2 + 2 * x * gamma) * (x + gamma) * (part1 - part2)
+        f = (
+            math.sqrt(x**2 + 2 * x * gamma)
+            * (x + gamma)
+            * (n_part(x - alpha) - n_part(x + 2 * gamma + alpha))
+        )
         return f * self._prefactor(temperature, power=3)
 
-    def pressure_integrand(self, x, temperature, alpha):
+    def default_pressure_integrand(self, x, temperature, alpha):
         """The default pressure integrand.
 
         Args:
@@ -97,7 +119,7 @@ class Fermion(wbst.Particle):
         f = math.sqrt(x**2 + 2 * x * gamma) * (x + gamma) * (part1 + part2)
         return f * self._prefactor(temperature, power=4)
 
-    def energy_density_integrand(self, x, temperature, alpha):
+    def default_energy_density_integrand(self, x, temperature, alpha):
         """The default energy density integrand.
 
         Args:
@@ -120,7 +142,7 @@ class Fermion(wbst.Particle):
         f = nd_plus * (part1 + part2)
         return f * self._prefactor(temperature, power=4)
 
-    def entropy_density_integrand(self, x, temperature, alpha):
+    def default_entropy_density_integrand(self, x, temperature, alpha):
         """The default entropy density integrand.
 
         Args:
@@ -138,8 +160,14 @@ class Fermion(wbst.Particle):
         """
 
         def s_part(y):
-            return (y / (1.0 + self._safe_exp(y))) + math.log1p(
-                self._safe_exp(-y)
+            if y >= 0:
+                return y * self._safe_exp(-y) / (
+                    1.0 + self._safe_exp(-y)
+                ) + math.log1p(self._safe_exp(-y))
+            return (
+                (y / (1.0 + self._safe_exp(y)))
+                - y
+                + math.log1p(self._safe_exp(y))
             )
 
         gamma = self.get_gamma(temperature)
@@ -154,7 +182,7 @@ class Fermion(wbst.Particle):
             * f
         )
 
-    def internal_energy_density_integrand(self, x, temperature, alpha):
+    def default_internal_energy_density_integrand(self, x, temperature, alpha):
         """The default internal energy density integrand.
 
         Args:
@@ -178,43 +206,91 @@ class Fermion(wbst.Particle):
         return f * self._prefactor(temperature, power=4)
 
     def compute_chemical_potential(self, temperature, number_density):
+        """Routine to compute the chemical potential (less the rest mass) divided by kT.
+
+        Args:
+            ``temperature`` (:obj:`float`): The temperature (in K) at which to compute the
+            chemical potential.
+
+            ``number_density`` (:obj:`float`):  The number density (in per cc) at which to
+            compute the chemical potential.
+
+        Returns:
+            A :obj:`float` giving the chemical potential (less the rest mass) divided
+            by kT.
+
+        """
         return self._compute_chemical_potential(
-            self.integrands["number density"], temperature, number_density
+            self.functions["number density"],
+            self.integrands["number density"],
+            temperature,
+            number_density,
         )
 
     def compute_quantity(self, quantity, temperature, alpha):
+        """Routine to compute a thermodynamic quantity for the fermion.
+
+        Args:
+            ``quantity`` (:obj:`str`): The name of the quantity to compute.
+
+            ``temperature`` (:obj:`float`): The temperature (in K) at which to compute the
+            quantity.
+
+            ``alpha`` (:obj:`float`):  The chemical potential (less the rest mass)
+            divided by kT at which to compute the quantity.
+
+        Returns:
+            A :obj:`float` giving the quantity in cgs units.  The routine will first try
+            to compute the quantity with a function, if set.  If the function is not
+            set for the quantity, or if the conditions in the function are not met by
+            the input, the routine will integrate the associated integrand.
+
+        """
         assert (
             quantity in self.integrands
         ), "Integrand not specified for quantity."
         return self._compute_quantity(
-            self.integrands[quantity], temperature, alpha
+            self.functions[quantity],
+            self.integrands[quantity],
+            temperature,
+            alpha,
         )
 
     def compute_temperature_derivative(self, quantity, temperature, alpha):
+        """Routine to compute the temperature derivative of a thermodynamic quantity
+        for the fermion.
+
+        Args:
+            ``quantity`` (:obj:`str`): The name of the quantity to compute.
+
+            ``temperature`` (:obj:`float`): The temperature (in K) at which to compute the
+            derivative.
+
+            ``alpha`` (:obj:`float`):  The chemical potential (less the rest mass)
+            divided by kT at which to compute the derivative.
+
+        Returns:
+            A :obj:`float` giving the temperature derivative of the quantity in cgs units.
+
+        """
         assert (
             quantity in self.integrands
         ), "Integrand not specified for quantity."
         return self._compute_temperature_derivative(
-            self.integrands[quantity], temperature, alpha
+            self.functions[quantity],
+            self.integrands[quantity],
+            temperature,
+            alpha,
         )
-
-    def update_integrands(self, quantity, integrand_fn):
-        """A method to update the integrands for the fermion.
-
-        Args:
-            ``quantity`` (:obj:`str`): The name of the quantity.
-
-            ``integrand_fn`` (:obj:`float`): The integrand corresponding to the \
-            quantity.  The integrand function must take three arguments.  The first \
-            is the scaled energy *x*, the second is *T*, the temperature  in Kelvin, \
-            and the third is the *alpha*, the chemical potential (less the rest mass) \
-            divided by kT.  Other data can be bound to the integrand function.
-        """
-
-        self.integrands[quantity] = integrand_fn
 
 
 def create_electron():
+    """Convenience routine for creating an electron.
+
+    Returns:
+        An electron as a :obj:`wnstatmech.fermion.Fermion` object.
+
+    """
     electron_mass = (
         gc.GSL_CONST_CGSM_MASS_ELECTRON
         * (gc.GSL_CONST_CGSM_SPEED_OF_LIGHT**2)
