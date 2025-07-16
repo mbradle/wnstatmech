@@ -63,7 +63,7 @@ class Fermion(wbst.Particle):
             (fermions minus anti-fermions) in cgs units for the given input
             for the case when the rest mass is zero.  When it is not zero,
             the routine returns None so that other routines will compute the
-            number density by integration. 
+            number density by integration.
 
         """
         if self.get_rest_mass_cgs() == 0:
