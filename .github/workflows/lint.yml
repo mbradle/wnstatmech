@@ -20,5 +20,5 @@ jobs:
           pip install pylint numpy gslconsts scipy
       - name: run linter
         run: |
-          pylint wnstatmech/*.py
+          pylint wnstatmech/*.py --fail-under 9.8
 
