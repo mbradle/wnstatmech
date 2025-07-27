@@ -133,13 +133,46 @@ class Particle:
 
         return brentq(root_fn, lower, upper)
 
+    def _compute_degenerate_quantity(self, integrand_fn, temperature, alpha):
+        result = 0
+
+        if alpha <= 20:
+            tmp, _ = quad(
+                integrand_fn,
+                0.0,
+                np.inf,
+                args=(temperature, alpha),
+            )
+            result += tmp
+        else:
+            t_lims = [
+                (0, alpha - 20),
+                (alpha - 20, alpha - 10),
+                (alpha - 10, alpha),
+                (alpha, alpha + 10),
+                (alpha + 10, alpha + 20),
+                (alpha + 20, np.inf),
+            ]
+            for tup in t_lims:
+                res_tup = quad(
+                    integrand_fn,
+                    tup[0],
+                    tup[1],
+                    limit=1000,
+                    full_output=True,
+                    args=(temperature, alpha),
+                )
+                result += res_tup[0]
+
+        return result
+
     def _compute_quantity(self, func, integrand_fn, temperature, alpha):
         if func:
             result = func(temperature, alpha)
             if result:
                 return result
 
-        if alpha <= 1:
+        if alpha <= 0:
             result, _ = quad(
                 integrand_fn,
                 0,
@@ -147,22 +180,9 @@ class Particle:
                 args=(temperature, alpha),
             )
         else:
-            result = 0
-            tmp, _ = quad(
-                integrand_fn,
-                0.0,
-                alpha,
-                args=(temperature, alpha),
-                limit=1000,
+            result = self._compute_degenerate_quantity(
+                integrand_fn, temperature, alpha
             )
-            result += tmp
-            tmp, _ = quad(
-                integrand_fn,
-                alpha,
-                np.inf,
-                args=(temperature, alpha),
-            )
-            result += tmp
 
         return result
 

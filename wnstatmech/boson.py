@@ -29,17 +29,22 @@ class Boson(wbst.Particle):
         self.update_functions("internal energy density", None)
         self.update_functions("entropy density", None)
 
-        self.update_integrands("number density", self.number_density_integrand)
-        self.update_integrands("pressure", self.pressure_integrand)
-        self.update_integrands("energy density", self.energy_density_integrand)
         self.update_integrands(
-            "entropy density", self.entropy_density_integrand
+            "number density", self.default_number_density_integrand
+        )
+        self.update_integrands("pressure", self.default_pressure_integrand)
+        self.update_integrands(
+            "energy density", self.default_energy_density_integrand
         )
         self.update_integrands(
-            "internal energy density", self.internal_energy_density_integrand
+            "entropy density", self.default_entropy_density_integrand
+        )
+        self.update_integrands(
+            "internal energy density",
+            self.default_internal_energy_density_integrand,
         )
 
-    def number_density_integrand(self, x, temperature, alpha):
+    def default_number_density_integrand(self, x, temperature, alpha):
         """The default number density integrand.
 
         Args:
@@ -62,7 +67,7 @@ class Boson(wbst.Particle):
         f = math.sqrt(x**2 + 2 * x * gamma) * (x + gamma) / denom
         return f * self._prefactor(temperature, power=3)
 
-    def pressure_integrand(self, x, temperature, alpha):
+    def default_pressure_integrand(self, x, temperature, alpha):
         """The default pressure integrand.
 
         Args:
@@ -90,7 +95,7 @@ class Boson(wbst.Particle):
             f = 0.0
         return -f * self._prefactor(temperature, power=4)
 
-    def energy_density_integrand(self, x, temperature, alpha):
+    def default_energy_density_integrand(self, x, temperature, alpha):
         """The default energy density integrand.
 
         Args:
@@ -114,7 +119,7 @@ class Boson(wbst.Particle):
         f = nd_plus / denom
         return f * self._prefactor(temperature, power=4)
 
-    def entropy_density_integrand(self, x, temperature, alpha):
+    def default_entropy_density_integrand(self, x, temperature, alpha):
         """The default entropy density integrand.
 
         Args:
@@ -145,7 +150,7 @@ class Boson(wbst.Particle):
             * f
         )
 
-    def internal_energy_density_integrand(self, x, temperature, alpha):
+    def default_internal_energy_density_integrand(self, x, temperature, alpha):
         """The default internal energy density integrand.
 
         Args:
