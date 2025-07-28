@@ -64,10 +64,6 @@ def test_electron_quantities():
             s_fermion = electron.compute_quantity("entropy density", T, alpha)
             assert s_fermion > 0
 
-            #dUdT = electron.compute_temperature_derivative("internal energy density", T, alpha)
-            #TdSdT = T * electron.compute_temperature_derivative("entropy density", T, alpha)
-            #assert np.isclose(dUdT, TdSdT, 1.e-3)
-
 
 def test_photon_quantities():
     photon = ws.boson.create_photon()
@@ -85,7 +81,7 @@ def test_photon_quantities():
         ei_photon = photon.compute_quantity("internal energy density", T, 0)
         assert ei_photon == e_photon
         s_photon = photon.compute_quantity("entropy density", T, 0)
-        assert np.isclose(s_photon, 4.0 * a * T**3 / 3.0, 1.0e-3)
+        assert np.isclose(s_photon, 4.0 * a * T**3 / 3.0, 1.0e-8)
         dUdT = photon.compute_temperature_derivative("energy density", T, 0)
         TdSdT = T * photon.compute_temperature_derivative("entropy density", T, 0)
-        assert np.isclose(dUdT, TdSdT, 1.e-3)
+        assert np.isclose(dUdT, TdSdT, 1.e-8)

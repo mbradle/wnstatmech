@@ -6,9 +6,8 @@ authors:
   orcid: "https://orcid.org/0000-0001-6307-9818"
 - family-names: "Walls"
   given-names: "Lucas"
-  orcid: "https://orcid.org/0000-0002-xxxx-xxxx"
+  orcid: "https://orcid.org/0009-0004-0924-7437"
 title: "wnstatmech"
 version: 1.0.0
-doi: 10.5281/zenodo.15184988
-date-released: 2025-07-26
+date-released: 2025-07-30
 url: "https://github.com/mbradle/wnstatmech"

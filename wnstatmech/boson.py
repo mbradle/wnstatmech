@@ -1,8 +1,30 @@
 """This is the module that handles bosons."""
 
 import math
+from scipy.special import zeta
 import gslconsts.consts as gc
+import gslconsts.math as gm
 import wnstatmech.base as wbst
+
+a_rad = (
+    4
+    * gc.GSL_CONST_CGSM_STEFAN_BOLTZMANN_CONSTANT
+    / gc.GSL_CONST_CGSM_SPEED_OF_LIGHT
+)
+
+a_num = (
+    2
+    * zeta(3)
+    * gc.GSL_CONST_CGSM_BOLTZMANN**3
+    / (
+        gm.M_PI**2
+        * (
+            gc.GSL_CONST_CGSM_PLANCKS_CONSTANT_HBAR
+            * gc.GSL_CONST_CGSM_SPEED_OF_LIGHT
+        )
+        ** 3
+    )
+)
 
 
 class Boson(wbst.Particle):
@@ -23,11 +45,20 @@ class Boson(wbst.Particle):
     def __init__(self, name, rest_mass_mev, multiplicity, charge):
         super().__init__(name, rest_mass_mev, multiplicity, charge)
 
-        self.update_functions("number density", None)
-        self.update_functions("pressure", None)
-        self.update_functions("energy density", None)
-        self.update_functions("internal energy density", None)
-        self.update_functions("entropy density", None)
+        self.update_functions(
+            "number density", self.default_number_density_function
+        )
+        self.update_functions("pressure", self.default_pressure_function)
+        self.update_functions(
+            "energy density", self.default_energy_density_function
+        )
+        self.update_functions(
+            "internal energy density",
+            self.default_internal_energy_density_function,
+        )
+        self.update_functions(
+            "entropy density", self.default_entropy_density_function
+        )
 
         self.update_integrands(
             "number density", self.default_number_density_integrand
@@ -43,6 +74,26 @@ class Boson(wbst.Particle):
             "internal energy density",
             self.default_internal_energy_density_integrand,
         )
+
+    def default_number_density_function(self, temperature, alpha):
+        """The default number density function to treat case of zero-rest-mass boson.
+
+        Args:
+            ``temperature`` (:obj:`float`): The temperature (in K) at which to compute
+            the function.
+
+            ``alpha`` (:obj:`float`):  The chemical potential (less the rest mass) divided by kT.
+
+        Returns:
+            A :obj:`float` giving the boson number density in cgs units for the given input
+            for the case when the rest mass and chemical potential are zero.  When they are
+            not zero, the routine returns None so that other routines will compute the
+            function by integration.
+
+        """
+        if self.get_rest_mass_cgs() == 0 and alpha == 0:
+            return a_num * temperature**3
+        return None
 
     def default_number_density_integrand(self, x, temperature, alpha):
         """The default number density integrand.
@@ -66,6 +117,26 @@ class Boson(wbst.Particle):
             return 0.0
         f = math.sqrt(x**2 + 2 * x * gamma) * (x + gamma) / denom
         return f * self._prefactor(temperature, power=3)
+
+    def default_pressure_function(self, temperature, alpha):
+        """The default pressure function to treat case of zero-rest-mass boson.
+
+        Args:
+            ``temperature`` (:obj:`float`): The temperature (in K) at which to compute
+            the function.
+
+            ``alpha`` (:obj:`float`):  The chemical potential (less the rest mass) divided by kT.
+
+        Returns:
+            A :obj:`float` giving the boson pressure in cgs units for the given input
+            for the case when the rest mass and chemical potential are zero.  When they are
+            not zero, the routine returns None so that other routines will compute the
+            function by integration.
+
+        """
+        if self.get_rest_mass_cgs() == 0 and alpha == 0:
+            return a_rad * temperature**4 / 3.0
+        return None
 
     def default_pressure_integrand(self, x, temperature, alpha):
         """The default pressure integrand.
@@ -95,6 +166,26 @@ class Boson(wbst.Particle):
             f = 0.0
         return -f * self._prefactor(temperature, power=4)
 
+    def default_energy_density_function(self, temperature, alpha):
+        """The default energy density function to treat case of zero-rest-mass boson.
+
+        Args:
+            ``temperature`` (:obj:`float`): The temperature (in K) at which to compute
+            the function.
+
+            ``alpha`` (:obj:`float`):  The chemical potential (less the rest mass) divided by kT.
+
+        Returns:
+            A :obj:`float` giving the boson energy density in cgs units for the given input
+            for the case when the rest mass and chemical potential are zero.  When they are
+            not zero, the routine returns None so that other routines will compute the
+            function by integration.
+
+        """
+        if self.get_rest_mass_cgs() == 0 and alpha == 0:
+            return a_rad * temperature**4
+        return None
+
     def default_energy_density_integrand(self, x, temperature, alpha):
         """The default energy density integrand.
 
@@ -118,6 +209,26 @@ class Boson(wbst.Particle):
         nd_plus = ((x + gamma) ** 2) * math.sqrt(x**2 + 2 * x * gamma)
         f = nd_plus / denom
         return f * self._prefactor(temperature, power=4)
+
+    def default_entropy_density_function(self, temperature, alpha):
+        """The default entropy density function to treat case of zero-rest-mass boson.
+
+        Args:
+            ``temperature`` (:obj:`float`): The temperature (in K) at which to compute
+            the function.
+
+            ``alpha`` (:obj:`float`):  The chemical potential (less the rest mass) divided by kT.
+
+        Returns:
+            A :obj:`float` giving the boson entropy density in cgs units for the given input
+            for the case when the rest mass and chemical potential are zero.  When they are
+            not zero, the routine returns None so that other routines will compute the
+            function by integration.
+
+        """
+        if self.get_rest_mass_cgs() == 0 and alpha == 0:
+            return 4.0 * a_rad * temperature**3 / 3.0
+        return None
 
     def default_entropy_density_integrand(self, x, temperature, alpha):
         """The default entropy density integrand.
@@ -149,6 +260,26 @@ class Boson(wbst.Particle):
             * self._prefactor(temperature, power=3)
             * f
         )
+
+    def default_internal_energy_density_function(self, temperature, alpha):
+        """The default internal energy function to treat case of zero-rest-mass boson.
+
+        Args:
+            ``temperature`` (:obj:`float`): The temperature (in K) at which to compute
+            the function.
+
+            ``alpha`` (:obj:`float`):  The chemical potential (less the rest mass) divided by kT.
+
+        Returns:
+            A :obj:`float` giving the boson internal energy density in cgs units for the given
+            input for the case when the rest mass and chemical potential are zero.  When they are
+            not zero, the routine returns None so that other routines will compute the
+            function by integration.
+
+        """
+        if self.get_rest_mass_cgs() == 0 and alpha == 0:
+            return a_rad * temperature**4
+        return None
 
     def default_internal_energy_density_integrand(self, x, temperature, alpha):
         """The default internal energy density integrand.
