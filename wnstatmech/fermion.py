@@ -95,11 +95,14 @@ class Fermion(wbst.Particle):
             return 1.0 / (1.0 + self._safe_exp(y))
 
         gamma = self.get_gamma(temperature)
-        f = (
-            math.sqrt(x**2 + 2 * x * gamma)
-            * (x + gamma)
-            * (n_part(x - alpha) - n_part(x + 2 * gamma + alpha))
-        )
+
+        f = math.sqrt(x**2 + 2 * x * gamma) * (x + gamma)
+
+        if abs(alpha + gamma) < 1.e-3:
+            f *= math.expm1(2. * (alpha + gamma)) * n_part(alpha - x) * n_part(x + 2 * gamma + alpha)
+        else:
+            f *= (n_part(x - alpha) - n_part(x + 2*gamma + alpha))
+
         return f * self._prefactor(temperature, power=3)
 
     def default_pressure_integrand(self, x, temperature, alpha):
@@ -272,7 +275,9 @@ class Fermion(wbst.Particle):
             alpha,
         )
 
-    def compute_temperature_derivative(self, quantity, temperature, alpha):
+    def compute_temperature_derivative(
+        self, quantity, temperature, number_density
+    ):
         """Routine to compute the temperature derivative of a thermodynamic quantity
         for the fermion.
 
@@ -282,8 +287,8 @@ class Fermion(wbst.Particle):
             ``temperature`` (:obj:`float`): The temperature (in K) at which to compute the
             derivative.
 
-            ``alpha`` (:obj:`float`):  The chemical potential (less the rest mass)
-            divided by kT at which to compute the derivative.
+            ``number_density`` (:obj:`float`):  The fixed number density at which to compute
+            the derivative.
 
         Returns:
             A :obj:`float` giving the temperature derivative of the quantity in cgs units.
@@ -295,8 +300,10 @@ class Fermion(wbst.Particle):
         return self._compute_temperature_derivative(
             self.functions[quantity],
             self.integrands[quantity],
+            self.functions["number density"],
+            self.integrands["number density"],
             temperature,
-            alpha,
+            number_density,
         )
 
 

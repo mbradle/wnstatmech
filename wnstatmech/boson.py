@@ -353,7 +353,7 @@ class Boson(wbst.Particle):
             alpha,
         )
 
-    def compute_temperature_derivative(self, quantity, temperature, alpha):
+    def compute_temperature_derivative(self, quantity, temperature, number_density):
         """Routine to compute the temperature derivative of a thermodynamic quantity
         for the boson.
 
@@ -363,8 +363,8 @@ class Boson(wbst.Particle):
             ``temperature`` (:obj:`float`): The temperature (in K) at which to compute the
             derivative.
 
-            ``alpha`` (:obj:`float`):  The chemical potential (less the rest mass)
-            divided by kT at which to compute the derivative.
+            ``number_density`` (:obj:`float`):  The fixed number density at which to
+            compute the derivative.
 
         Returns:
             A :obj:`float` giving the temperature derivative of the quantity in cgs units.
@@ -374,8 +374,10 @@ class Boson(wbst.Particle):
         return self._compute_temperature_derivative(
             self.functions[quantity],
             self.integrands[quantity],
+            self.functions["number density"],
+            self.integrands["number density"],
             temperature,
-            alpha,
+            number_density,
         )
 
 

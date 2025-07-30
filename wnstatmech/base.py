@@ -187,14 +187,26 @@ class Particle:
         return result
 
     def _compute_temperature_derivative(
-        self, func, integrand_fn, temperature, alpha
+        self,
+        func,
+        integrand_fn,
+        num_func,
+        num_integrand_fn,
+        temperature,
+        number_density,
     ):
         def deriv_func(temp):
             if temp.ndim == 0:
+                alpha = self._compute_chemical_potential(
+                    num_func, num_integrand_fn, temp, number_density
+                )
                 return self._compute_quantity(func, integrand_fn, temp, alpha)
 
             result = np.zeros((temp.shape[0], temp.shape[1]))
             for i in range(temp.shape[1]):
+                alpha = self._compute_chemical_potential(
+                    num_func, num_integrand_fn, temp[0, i], number_density
+                )
                 result[0, i] = self._compute_quantity(
                     func, integrand_fn, temp[0, i], alpha
                 )
@@ -203,7 +215,7 @@ class Particle:
         return derivative(
             deriv_func,
             temperature,
-            initial_step=1e-3 * temperature,
+            initial_step=1e-2 * temperature,
         ).df
 
     def update_functions(self, quantity, func):
