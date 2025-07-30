@@ -98,10 +98,14 @@ class Fermion(wbst.Particle):
 
         f = math.sqrt(x**2 + 2 * x * gamma) * (x + gamma)
 
-        if abs(alpha + gamma) < 1.e-3:
-            f *= math.expm1(2. * (alpha + gamma)) * n_part(alpha - x) * n_part(x + 2 * gamma + alpha)
+        if abs(alpha + gamma) < 1.0e-3:
+            f *= (
+                math.expm1(2.0 * (alpha + gamma))
+                * n_part(alpha - x)
+                * n_part(x + 2 * gamma + alpha)
+            )
         else:
-            f *= (n_part(x - alpha) - n_part(x + 2*gamma + alpha))
+            f *= n_part(x - alpha) - n_part(x + 2 * gamma + alpha)
 
         return f * self._prefactor(temperature, power=3)
 
@@ -279,7 +283,7 @@ class Fermion(wbst.Particle):
         self, quantity, temperature, number_density
     ):
         """Routine to compute the temperature derivative of a thermodynamic quantity
-        for the fermion.
+        for the fermion at fixed number density.
 
         Args:
             ``quantity`` (:obj:`str`): The name of the quantity to compute.
@@ -298,10 +302,12 @@ class Fermion(wbst.Particle):
             quantity in self.integrands
         ), "Integrand not specified for quantity."
         return self._compute_temperature_derivative(
-            self.functions[quantity],
-            self.integrands[quantity],
-            self.functions["number density"],
-            self.integrands["number density"],
+            (
+                self.functions[quantity],
+                self.integrands[quantity],
+                self.functions["number density"],
+                self.integrands["number density"],
+            ),
             temperature,
             number_density,
         )

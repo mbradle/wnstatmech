@@ -6,7 +6,7 @@ import gslconsts.consts as gc
 import gslconsts.math as gm
 import wnstatmech.base as wbst
 
-a_rad = (
+RAD_CONST = (
     4
     * gc.GSL_CONST_CGSM_STEFAN_BOLTZMANN_CONSTANT
     / gc.GSL_CONST_CGSM_SPEED_OF_LIGHT
@@ -135,7 +135,7 @@ class Boson(wbst.Particle):
 
         """
         if self.get_rest_mass_cgs() == 0 and alpha == 0:
-            return a_rad * temperature**4 / 3.0
+            return RAD_CONST * temperature**4 / 3.0
         return None
 
     def default_pressure_integrand(self, x, temperature, alpha):
@@ -183,7 +183,7 @@ class Boson(wbst.Particle):
 
         """
         if self.get_rest_mass_cgs() == 0 and alpha == 0:
-            return a_rad * temperature**4
+            return RAD_CONST * temperature**4
         return None
 
     def default_energy_density_integrand(self, x, temperature, alpha):
@@ -227,7 +227,7 @@ class Boson(wbst.Particle):
 
         """
         if self.get_rest_mass_cgs() == 0 and alpha == 0:
-            return 4.0 * a_rad * temperature**3 / 3.0
+            return 4.0 * RAD_CONST * temperature**3 / 3.0
         return None
 
     def default_entropy_density_integrand(self, x, temperature, alpha):
@@ -278,7 +278,7 @@ class Boson(wbst.Particle):
 
         """
         if self.get_rest_mass_cgs() == 0 and alpha == 0:
-            return a_rad * temperature**4
+            return RAD_CONST * temperature**4
         return None
 
     def default_internal_energy_density_integrand(self, x, temperature, alpha):
@@ -353,9 +353,11 @@ class Boson(wbst.Particle):
             alpha,
         )
 
-    def compute_temperature_derivative(self, quantity, temperature, number_density):
+    def compute_temperature_derivative(
+        self, quantity, temperature, number_density
+    ):
         """Routine to compute the temperature derivative of a thermodynamic quantity
-        for the boson.
+        for the boson at fixed number density.
 
         Args:
             ``quantity`` (:obj:`str`): The name of the quantity to compute.
@@ -372,10 +374,12 @@ class Boson(wbst.Particle):
         """
 
         return self._compute_temperature_derivative(
-            self.functions[quantity],
-            self.integrands[quantity],
-            self.functions["number density"],
-            self.integrands["number density"],
+            (
+                self.functions[quantity],
+                self.integrands[quantity],
+                self.functions["number density"],
+                self.integrands["number density"],
+            ),
             temperature,
             number_density,
         )
