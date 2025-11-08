@@ -9,8 +9,8 @@ Version 1.0.1
 
 New:
 
-  * Add the zenodo doi.
-  * Add the .readthedocs.yaml file for proper documentation building.
+  * The zenodo doi has been added.
+  * A .readthedocs.yaml file has been added for proper documentation building.
 
 
 Version 1.0.0
