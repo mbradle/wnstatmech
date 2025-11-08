@@ -220,7 +220,7 @@ class Particle:
             initial_step=1e-2 * temperature,
         ).df
 
-    def update_functions(self, quantity, func):
+    def update_function(self, quantity, func):
         """A method to update the functions for the particle.
 
         Args:
@@ -237,8 +237,8 @@ class Particle:
 
         self.functions[quantity] = func
 
-    def update_integrands(self, quantity, integrand_fn):
-        """A method to update the integrands for the particle.
+    def update_integrand(self, quantity, integrand_fn):
+        """A method to update an integrand for the particle.
 
         Args:
             ``quantity`` (:obj:`str`): The name of the quantity.

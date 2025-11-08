@@ -26,25 +26,25 @@ class Fermion(wbst.Particle):
     def __init__(self, name, rest_mass_mev, multiplicity, charge):
         super().__init__(name, rest_mass_mev, multiplicity, charge)
 
-        self.update_functions(
+        self.update_function(
             "number density", self.default_number_density_function
         )
-        self.update_functions("pressure", None)
-        self.update_functions("energy density", None)
-        self.update_functions("internal energy density", None)
-        self.update_functions("entropy density", None)
+        self.update_function("pressure", None)
+        self.update_function("energy density", None)
+        self.update_function("internal energy density", None)
+        self.update_function("entropy density", None)
 
-        self.update_integrands(
+        self.update_integrand(
             "number density", self.default_number_density_integrand
         )
-        self.update_integrands("pressure", self.default_pressure_integrand)
-        self.update_integrands(
+        self.update_integrand("pressure", self.default_pressure_integrand)
+        self.update_integrand(
             "energy density", self.default_energy_density_integrand
         )
-        self.update_integrands(
+        self.update_integrand(
             "entropy density", self.default_entropy_density_integrand
         )
-        self.update_integrands(
+        self.update_integrand(
             "internal energy density",
             self.default_internal_energy_density_integrand,
         )

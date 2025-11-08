@@ -1,6 +1,7 @@
 import requests, io
 import numpy as np
 import gslconsts.consts as gc
+import gslconsts.math as gm
 import wnstatmech as ws
 
 a = (
@@ -64,6 +65,7 @@ def test_electron_quantities():
             s_fermion = electron.compute_quantity("entropy density", T, alpha)
             assert s_fermion > 0
 
+
 def test_fermion_derivative():
     electron = ws.fermion.create_electron()
 
@@ -78,7 +80,70 @@ def test_fermion_derivative():
             TdSdT = T * electron.compute_temperature_derivative(
                 "entropy density", T, n_den
             )
-            assert np.isclose(dUdT, TdSdT, 1.e-3)
+            assert np.isclose(dUdT, TdSdT, 1.0e-3)
+
+
+def fermion_pressure_function(T, alpha, n):
+    return n * gc.GSL_CONST_CGSM_BOLTZMANN * T
+
+
+def test_fermion_function():
+    neutron = ws.fermion.Fermion("neutron", 939.55, 2, 0)
+    classical_neutron = ws.fermion.Fermion("classical neutron", 939.55, 2, 0)
+
+    T = 1.0e7
+
+    n = 1.0e20
+    alpha = neutron.compute_chemical_potential(T, n)
+
+    P1 = neutron.compute_quantity("pressure", T, alpha)
+
+    my_func = lambda T, alpha: fermion_pressure_function(T, alpha, n)
+    classical_neutron.update_function("pressure", my_func)
+    P2 = classical_neutron.compute_quantity("pressure", T, alpha)
+
+    assert np.isclose(P1, P2, rtol = 1.0e-5)
+
+
+def fermion_pressure_integrand(x, T, alpha, self):
+    kT = gc.GSL_CONST_CGSM_BOLTZMANN * T
+    gamma = self.get_rest_mass_cgs() / kT
+    part1 = self.get_properties()["multiplicity"] / (2 * gm.M_PI**2)
+    part2 = (
+        kT
+        / (
+            gc.GSL_CONST_CGSM_PLANCKS_CONSTANT_HBAR
+            * gc.GSL_CONST_CGSM_SPEED_OF_LIGHT
+        )
+    ) ** 3
+
+    return (
+        part1
+        * part2
+        * kT
+        * np.exp(alpha)
+        * np.sqrt(2. * x) * np.exp(-x)
+        * np.power(gamma, 3.0 / 2.0)
+    )
+
+
+def test_fermion_integrand():
+    neutron = ws.fermion.Fermion("neutron", 939.55, 2, 0)
+    classical_neutron = ws.fermion.Fermion("classical neutron", 939.55, 2, 0)
+
+    T = 1.0e7
+
+    alpha = -15
+    P1 = neutron.compute_quantity("pressure", T, alpha)
+
+    my_integrand = lambda x, T, alpha: fermion_pressure_integrand(
+        x, T, alpha, classical_neutron
+    )
+    classical_neutron.update_integrand("pressure", my_integrand)
+    P2 = classical_neutron.compute_quantity("pressure", T, alpha)
+
+    assert np.isclose(P1, P2, rtol = 1.0e-5)
+
 
 def test_photon_quantities():
     photon = ws.boson.create_photon()
