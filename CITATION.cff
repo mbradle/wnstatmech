@@ -8,6 +8,7 @@ authors:
   given-names: "Lucas"
   orcid: "https://orcid.org/0009-0004-0924-7437"
 title: "wnstatmech"
-version: 1.0.0
+version: 1.0.1
+doi: 10.5281/zenodo.17561282
 date-released: 2025-11-08
 url: "https://github.com/mbradle/wnstatmech"

@@ -1,6 +1,9 @@
 Overview
 ========
 
+.. image:: https://zenodo.org/badge/1019497078.svg
+  :target: https://doi.org/10.5281/zenodo.17561282
+
 wnstatmech is a python package for handling the statistical
 mechanics of fermions and bosons.
 
