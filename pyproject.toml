@@ -8,9 +8,9 @@ exclude = ["tutorial*"]
 
 [project]
 name = "wnstatmech"
-version = "1.0.1"
+version = "1.0.2"
 dependencies = ["scipy", "numpy", "gslconsts"]
-requires-python = ">=3.0"
+requires-python = ">=3.10"
 authors = [
   {name = "Bradley S. Meyer", email = "mbradle@g.clemson.edu"},
   {name = "Lucas S. Walls", email = "lwalls@g.clemson.edu"},
