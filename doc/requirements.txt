@@ -2,7 +2,7 @@ lxml
 wnutils
 networkx
 gslconsts
-scipy
+scipy>=1.15.0
 dataclasses
 sphinx_rtd_theme
 #readthedocs-sphinx-search==0.1.1
