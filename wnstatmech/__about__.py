@@ -13,6 +13,6 @@ __all__ = [
 
 __title__ = "wnstatmech"
 __summary__ = "Python project to handle thermodynamics of fermions and bosons."
-__version__ = "1.0.4"
+__version__ = "1.1.0"
 __author__ = "Clemson University"
-__copyright__ = "Clemson University, 2025"
+__copyright__ = "Clemson University, 2025-2026"

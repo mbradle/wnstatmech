@@ -1,6 +1,7 @@
 """This is the module that handles fermions."""
 
 import math
+import numpy as np
 import gslconsts.consts as gc
 import gslconsts.math as gm
 import wnstatmech.base as wbst
@@ -21,10 +22,33 @@ class Fermion(wbst.Particle):
 
         ``charge`` (:obj:`int`):  The charge of the fermion.
 
+        ``workers`` (:obj:`int`): The number of workers to use for integration.
+
+        ``integration_epsabs`` (:obj:`float`): Absolute integration tolerance.
+
+        ``integration_epsrel`` (:obj:`float`): Relative integration tolerance.
+
     """
 
-    def __init__(self, name, rest_mass_mev, multiplicity, charge):
-        super().__init__(name, rest_mass_mev, multiplicity, charge)
+    def __init__(
+        self,
+        name,
+        rest_mass_mev,
+        multiplicity,
+        charge,
+        workers=1,
+        integration_epsabs=wbst.DEFAULT_INTEGRATION_EPSABS,
+        integration_epsrel=wbst.DEFAULT_INTEGRATION_EPSREL,
+    ):
+        super().__init__(
+            name,
+            rest_mass_mev,
+            multiplicity,
+            charge,
+            workers=workers,
+            integration_epsabs=integration_epsabs,
+            integration_epsrel=integration_epsrel,
+        )
 
         self.update_function(
             "number density", self.default_number_density_function
@@ -89,23 +113,46 @@ class Fermion(wbst.Particle):
 
         """
 
+        if np.ndim(temperature) == 0 and np.ndim(alpha) == 0:
+
+            def n_part_scalar(y):
+                if y > 0:
+                    return self._safe_exp(-y) / (1.0 + self._safe_exp(-y))
+                return 1.0 / (1.0 + self._safe_exp(y))
+
+            gamma = self.get_gamma(temperature)
+            f = math.sqrt(x**2 + 2 * x * gamma) * (x + gamma)
+
+            if abs(alpha + gamma) < 1.0e-3:
+                f *= (
+                    math.expm1(2.0 * (alpha + gamma))
+                    * n_part_scalar(alpha - x)
+                    * n_part_scalar(x + 2 * gamma + alpha)
+                )
+            else:
+                f *= n_part_scalar(x - alpha) - n_part_scalar(
+                    x + 2 * gamma + alpha
+                )
+
+            return f * self._prefactor(temperature, power=3)
+
         def n_part(y):
-            if y > 0:
-                return self._safe_exp(-y) / (1.0 + self._safe_exp(-y))
-            return 1.0 / (1.0 + self._safe_exp(y))
+            return np.exp(-np.logaddexp(0.0, y))
 
         gamma = self.get_gamma(temperature)
+        f = np.sqrt(x**2 + 2 * x * gamma) * (x + gamma)
 
-        f = math.sqrt(x**2 + 2 * x * gamma) * (x + gamma)
-
-        if abs(alpha + gamma) < 1.0e-3:
-            f *= (
-                math.expm1(2.0 * (alpha + gamma))
-                * n_part(alpha - x)
-                * n_part(x + 2 * gamma + alpha)
+        delta = alpha + gamma
+        regular_term = n_part(x - alpha) - n_part(x + 2 * gamma + alpha)
+        near = np.abs(delta) < 1.0e-3
+        term = np.array(regular_term, copy=True)
+        if np.any(near):
+            term[near] = (
+                np.expm1(2.0 * delta[near])
+                * n_part(alpha[near] - x)
+                * n_part(x + 2 * gamma[near] + alpha[near])
             )
-        else:
-            f *= n_part(x - alpha) - n_part(x + 2 * gamma + alpha)
+        f *= term
 
         return f * self._prefactor(temperature, power=3)
 
@@ -126,20 +173,31 @@ class Fermion(wbst.Particle):
 
         """
         gamma = self.get_gamma(temperature)
-        if alpha - x <= 0:
-            part1 = math.log1p(self._safe_exp(alpha - x))
-        else:
-            part1 = alpha - x + math.log1p(self._safe_exp(x - alpha))
-        if x + 2 * gamma + alpha <= 0:
-            part2 = (
-                -x
-                - 2 * gamma
-                - alpha
-                + math.log1p(self._safe_exp(x + 2 * gamma + alpha))
+
+        if np.ndim(temperature) == 0 and np.ndim(alpha) == 0:
+            if alpha - x <= 0:
+                part1 = math.log1p(self._safe_exp(alpha - x))
+            else:
+                part1 = alpha - x + math.log1p(self._safe_exp(x - alpha))
+            if x + 2 * gamma + alpha <= 0:
+                part2 = (
+                    -x
+                    - 2 * gamma
+                    - alpha
+                    + math.log1p(self._safe_exp(x + 2 * gamma + alpha))
+                )
+            else:
+                part2 = math.log1p(self._safe_exp(-x - 2 * gamma - alpha))
+            f = (
+                math.sqrt(x**2 + 2 * x * gamma)
+                * (x + gamma)
+                * (part1 + part2)
             )
-        else:
-            part2 = math.log1p(self._safe_exp(-x - 2 * gamma - alpha))
-        f = math.sqrt(x**2 + 2 * x * gamma) * (x + gamma) * (part1 + part2)
+            return f * self._prefactor(temperature, power=4)
+
+        part1 = np.logaddexp(0.0, alpha - x)
+        part2 = np.logaddexp(0.0, -x - 2 * gamma - alpha)
+        f = np.sqrt(x**2 + 2 * x * gamma) * (x + gamma) * (part1 + part2)
         return f * self._prefactor(temperature, power=4)
 
     def default_energy_density_integrand(self, x, temperature, alpha):
@@ -159,9 +217,17 @@ class Fermion(wbst.Particle):
 
         """
         gamma = self.get_gamma(temperature)
-        nd_plus = ((x + gamma) ** 2) * math.sqrt(x**2 + 2 * x * gamma)
-        part1 = 1 / (self._safe_exp(x - alpha) + 1)
-        part2 = 1 / (self._safe_exp(x + 2 * gamma + alpha) + 1)
+
+        if np.ndim(temperature) == 0 and np.ndim(alpha) == 0:
+            nd_plus = ((x + gamma) ** 2) * math.sqrt(x**2 + 2 * x * gamma)
+            part1 = 1 / (self._safe_exp(x - alpha) + 1)
+            part2 = 1 / (self._safe_exp(x + 2 * gamma + alpha) + 1)
+            f = nd_plus * (part1 + part2)
+            return f * self._prefactor(temperature, power=4)
+
+        nd_plus = ((x + gamma) ** 2) * np.sqrt(x**2 + 2 * x * gamma)
+        part1 = np.exp(-np.logaddexp(0.0, x - alpha))
+        part2 = np.exp(-np.logaddexp(0.0, x + 2 * gamma + alpha))
         f = nd_plus * (part1 + part2)
         return f * self._prefactor(temperature, power=4)
 
@@ -182,20 +248,40 @@ class Fermion(wbst.Particle):
 
         """
 
-        def s_part(y):
-            if y >= 0:
-                return y * self._safe_exp(-y) / (
-                    1.0 + self._safe_exp(-y)
-                ) + math.log1p(self._safe_exp(-y))
+        gamma = self.get_gamma(temperature)
+
+        if np.ndim(temperature) == 0 and np.ndim(alpha) == 0:
+
+            def s_part_scalar(y):
+                if y >= 0:
+                    return y * self._safe_exp(-y) / (
+                        1.0 + self._safe_exp(-y)
+                    ) + math.log1p(self._safe_exp(-y))
+                return (
+                    (y / (1.0 + self._safe_exp(y)))
+                    - y
+                    + math.log1p(self._safe_exp(y))
+                )
+
+            f = (
+                math.sqrt(x**2 + 2 * x * gamma)
+                * (x + gamma)
+                * (
+                    s_part_scalar(x - alpha)
+                    + s_part_scalar(x + 2 * gamma + alpha)
+                )
+            )
             return (
-                (y / (1.0 + self._safe_exp(y)))
-                - y
-                + math.log1p(self._safe_exp(y))
+                gc.GSL_CONST_CGSM_BOLTZMANN
+                * self._prefactor(temperature, power=3)
+                * f
             )
 
-        gamma = self.get_gamma(temperature)
+        def s_part(y):
+            return np.logaddexp(0.0, -y) + y * np.exp(-np.logaddexp(0.0, y))
+
         f = (
-            math.sqrt(x**2 + 2 * x * gamma)
+            np.sqrt(x**2 + 2 * x * gamma)
             * (x + gamma)
             * (s_part(x - alpha) + s_part(x + 2 * gamma + alpha))
         )
@@ -222,9 +308,17 @@ class Fermion(wbst.Particle):
 
         """
         gamma = self.get_gamma(temperature)
-        nd_plus = (x * (x + gamma)) * math.sqrt(x**2 + 2 * x * gamma)
-        part1 = 1 / (self._safe_exp(x - alpha) + 1)
-        part2 = 1 / (self._safe_exp(x + 2 * gamma + alpha) + 1)
+
+        if np.ndim(temperature) == 0 and np.ndim(alpha) == 0:
+            nd_plus = (x * (x + gamma)) * math.sqrt(x**2 + 2 * x * gamma)
+            part1 = 1 / (self._safe_exp(x - alpha) + 1)
+            part2 = 1 / (self._safe_exp(x + 2 * gamma + alpha) + 1)
+            f = nd_plus * (part1 + part2)
+            return f * self._prefactor(temperature, power=4)
+
+        nd_plus = (x * (x + gamma)) * np.sqrt(x**2 + 2 * x * gamma)
+        part1 = np.exp(-np.logaddexp(0.0, x - alpha))
+        part2 = np.exp(-np.logaddexp(0.0, x + 2 * gamma + alpha))
         f = nd_plus * (part1 + part2)
         return f * self._prefactor(temperature, power=4)
 
@@ -313,7 +407,11 @@ class Fermion(wbst.Particle):
         )
 
 
-def create_electron():
+def create_electron(
+    workers=1,
+    integration_epsabs=wbst.DEFAULT_INTEGRATION_EPSABS,
+    integration_epsrel=wbst.DEFAULT_INTEGRATION_EPSREL,
+):
     """Convenience routine for creating an electron.
 
     Returns:
@@ -325,4 +423,12 @@ def create_electron():
         * (gc.GSL_CONST_CGSM_SPEED_OF_LIGHT**2)
         / (gc.GSL_CONST_NUM_MEGA * gc.GSL_CONST_CGSM_ELECTRON_VOLT)
     )
-    return Fermion("electron", electron_mass, 2, -1)
+    return Fermion(
+        "electron",
+        electron_mass,
+        2,
+        -1,
+        workers=workers,
+        integration_epsabs=integration_epsabs,
+        integration_epsrel=integration_epsrel,
+    )

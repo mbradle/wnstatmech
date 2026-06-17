@@ -17,6 +17,24 @@ typing in your favorite terminal::
 
     $ pip install wnstatmech
 
+Performance controls
+--------------------
+
+Fermion and Boson objects accept optional ``workers``,
+``integration_epsabs``, and ``integration_epsrel`` arguments to control
+numerical integration performance and accuracy.  When using multiple workers
+in a script, create and use the particle inside a ``__main__`` guard::
+
+    import wnstatmech as ws
+
+    if __name__ == "__main__":
+        electron = ws.fermion.create_electron(
+            workers=4, integration_epsrel=1.0e-6
+        )
+        pressure = electron.compute_quantity("pressure", 1.0e9, -2.0)
+
+The call signatures remain backwards compatible with scalar usage.
+
 Authors
 -------
 

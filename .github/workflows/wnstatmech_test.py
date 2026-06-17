@@ -1,3 +1,10 @@
+import os
+import subprocess
+import sys
+import textwrap
+from pathlib import Path
+
+import pytest
 import requests, io
 import numpy as np
 import gslconsts.consts as gc
@@ -143,6 +150,126 @@ def test_fermion_integrand():
     P2 = classical_neutron.compute_quantity("pressure", T, alpha)
 
     assert np.isclose(P1, P2, rtol = 1.0e-5)
+
+
+def _assert_vectorized_quantity_matches_scalar(
+    particle, quantity, temperatures, alphas, rtol=1.0e-5
+):
+    vector_result = np.asarray(
+        particle.compute_quantity(quantity, temperatures, alphas), dtype=float
+    )
+    scalar_result = np.asarray(
+        [
+            particle.compute_quantity(quantity, T, alpha)
+            for T, alpha in zip(temperatures, alphas)
+        ],
+        dtype=float,
+    )
+    assert np.allclose(vector_result, scalar_result, rtol=rtol, atol=0.0)
+
+
+def test_fermion_vectorized_quantities_match_scalar():
+    electron = ws.fermion.create_electron()
+
+    temperatures = np.array([1.0e7, 1.0e8, 1.0e9, 1.0e10])
+    alphas = np.array([-5.0, -1.0, 1.0, 5.0])
+
+    for quantity in (
+        "number density",
+        "pressure",
+        "energy density",
+        "internal energy density",
+        "entropy density",
+    ):
+        _assert_vectorized_quantity_matches_scalar(
+            electron, quantity, temperatures, alphas
+        )
+
+
+def test_boson_vectorized_quantities_match_scalar():
+    photon = ws.boson.create_photon()
+
+    temperatures = np.array([1.0e7, 1.0e8, 1.0e9])
+    alphas = np.array([-5.0, -1.0, -0.1])
+
+    for quantity in (
+        "number density",
+        "pressure",
+        "energy density",
+        "internal energy density",
+        "entropy density",
+    ):
+        _assert_vectorized_quantity_matches_scalar(
+            photon, quantity, temperatures, alphas, rtol=1.0e-4
+        )
+
+
+def test_vectorized_chemical_potential_round_trip():
+    electron = ws.fermion.create_electron()
+
+    temperatures = np.array([1.0e7, 1.0e8, 1.0e9, 1.0e10])
+    alphas = np.array([-5.0, -1.0, 1.0, 5.0])
+    number_densities = electron.compute_quantity(
+        "number density", temperatures, alphas
+    )
+
+    roots = electron.compute_chemical_potential(
+        temperatures, number_densities
+    )
+
+    assert np.allclose(roots, alphas, atol=1.0e-5)
+
+
+def test_worker_integration_matches_scalar(tmp_path):
+    script = tmp_path / "worker_check.py"
+    script.write_text(
+        textwrap.dedent(
+            """
+            import numpy as np
+            import wnstatmech as ws
+
+            if __name__ == "__main__":
+                scalar = ws.fermion.create_electron().compute_quantity(
+                    "pressure", 1.0e9, -2.0
+                )
+                parallel = ws.fermion.create_electron(
+                    workers=2
+                ).compute_quantity("pressure", 1.0e9, -2.0)
+                print(np.isclose(scalar, parallel, rtol=1.0e-6, atol=0.0))
+            """
+        )
+    )
+    env = os.environ.copy()
+    repo_root = Path(__file__).resolve().parents[2]
+    env["PYTHONPATH"] = os.pathsep.join(
+        [str(repo_root), env.get("PYTHONPATH", "")]
+    )
+
+    result = subprocess.run(
+        [sys.executable, str(script)],
+        check=True,
+        capture_output=True,
+        env=env,
+        text=True,
+    )
+
+    assert result.stdout.strip() == "True"
+
+
+def test_zero_custom_function_result_is_used():
+    neutron = ws.fermion.Fermion("neutron", 939.55, 2, 0)
+    neutron.update_function("pressure", lambda T, alpha: 0.0)
+
+    assert neutron.compute_quantity("pressure", 1.0e7, -15.0) == 0.0
+
+
+def test_invalid_integration_tolerances_raise():
+    with pytest.raises(ValueError, match="Invalid integration tolerance"):
+        ws.fermion.create_electron(integration_epsabs=-1.0)
+
+    with pytest.raises(ValueError, match="Invalid integration tolerance"):
+        ws.fermion.create_electron(integration_epsrel=0.0)
+
 
 
 def test_photon_quantities():

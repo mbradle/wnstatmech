@@ -1,6 +1,7 @@
 """This is the module that handles bosons."""
 
 import math
+import numpy as np
 from scipy.special import zeta
 import gslconsts.consts as gc
 import gslconsts.math as gm
@@ -40,10 +41,33 @@ class Boson(wbst.Particle):
 
         ``charge`` (:obj:`int`):  The charge of the boson.
 
+        ``workers`` (:obj:`int`): The number of workers to use for integration.
+
+        ``integration_epsabs`` (:obj:`float`): Absolute integration tolerance.
+
+        ``integration_epsrel`` (:obj:`float`): Relative integration tolerance.
+
     """
 
-    def __init__(self, name, rest_mass_mev, multiplicity, charge):
-        super().__init__(name, rest_mass_mev, multiplicity, charge)
+    def __init__(
+        self,
+        name,
+        rest_mass_mev,
+        multiplicity,
+        charge,
+        workers=1,
+        integration_epsabs=wbst.DEFAULT_INTEGRATION_EPSABS,
+        integration_epsrel=wbst.DEFAULT_INTEGRATION_EPSREL,
+    ):
+        super().__init__(
+            name,
+            rest_mass_mev,
+            multiplicity,
+            charge,
+            workers=workers,
+            integration_epsabs=integration_epsabs,
+            integration_epsrel=integration_epsrel,
+        )
 
         self.update_function(
             "number density", self.default_number_density_function
@@ -112,10 +136,23 @@ class Boson(wbst.Particle):
         """
 
         gamma = self.get_gamma(temperature)
-        denom = self._safe_expm1(x - alpha)
-        if denom == 0:
-            return 0.0
-        f = math.sqrt(x**2 + 2 * x * gamma) * (x + gamma) / denom
+
+        if np.ndim(temperature) == 0 and np.ndim(alpha) == 0:
+            denom = self._safe_expm1(x - alpha)
+            if denom == 0:
+                return 0.0
+            f = math.sqrt(x**2 + 2 * x * gamma) * (x + gamma) / denom
+            return f * self._prefactor(temperature, power=3)
+
+        with np.errstate(over="ignore"):
+            denom = np.expm1(x - alpha)
+        numerator = np.sqrt(x**2 + 2 * x * gamma) * (x + gamma)
+        f = np.divide(
+            numerator,
+            denom,
+            out=np.zeros_like(numerator, dtype=float),
+            where=denom != 0,
+        )
         return f * self._prefactor(temperature, power=3)
 
     def default_pressure_function(self, temperature, alpha):
@@ -156,14 +193,25 @@ class Boson(wbst.Particle):
         """
 
         gamma = self.get_gamma(temperature)
-        try:
-            f = (
-                math.sqrt(x**2 + 2 * x * gamma)
-                * (x + gamma)
-                * math.log1p(-self._safe_exp(alpha - x))
-            )
-        except ValueError:
-            f = 0.0
+
+        if np.ndim(temperature) == 0 and np.ndim(alpha) == 0:
+            try:
+                f = (
+                    math.sqrt(x**2 + 2 * x * gamma)
+                    * (x + gamma)
+                    * math.log1p(-self._safe_exp(alpha - x))
+                )
+            except ValueError:
+                f = 0.0
+            return -f * self._prefactor(temperature, power=4)
+
+        y = alpha - x
+        y_array = np.asarray(y)
+        log_term = np.zeros_like(y_array, dtype=float)
+        valid = y_array < 0
+        if np.any(valid):
+            log_term[valid] = np.log1p(-np.exp(y_array[valid]))
+        f = np.sqrt(x**2 + 2 * x * gamma) * (x + gamma) * log_term
         return -f * self._prefactor(temperature, power=4)
 
     def default_energy_density_function(self, temperature, alpha):
@@ -203,11 +251,24 @@ class Boson(wbst.Particle):
         """
 
         gamma = self.get_gamma(temperature)
-        denom = self._safe_expm1(x - alpha)
-        if denom == 0:
-            return 0.0
-        nd_plus = ((x + gamma) ** 2) * math.sqrt(x**2 + 2 * x * gamma)
-        f = nd_plus / denom
+
+        if np.ndim(temperature) == 0 and np.ndim(alpha) == 0:
+            denom = self._safe_expm1(x - alpha)
+            if denom == 0:
+                return 0.0
+            nd_plus = ((x + gamma) ** 2) * math.sqrt(x**2 + 2 * x * gamma)
+            f = nd_plus / denom
+            return f * self._prefactor(temperature, power=4)
+
+        with np.errstate(over="ignore"):
+            denom = np.expm1(x - alpha)
+        numerator = ((x + gamma) ** 2) * np.sqrt(x**2 + 2 * x * gamma)
+        f = np.divide(
+            numerator,
+            denom,
+            out=np.zeros_like(numerator, dtype=float),
+            where=denom != 0,
+        )
         return f * self._prefactor(temperature, power=4)
 
     def default_entropy_density_function(self, temperature, alpha):
@@ -247,14 +308,37 @@ class Boson(wbst.Particle):
 
         """
         gamma = self.get_gamma(temperature)
-        f = (
-            math.sqrt(x**2 + 2 * x * gamma)
-            * (x + gamma)
-            * (
-                math.log1p(-self._safe_exp(alpha - x))
-                + (alpha - x) / (self._safe_expm1(x - alpha))
+
+        if np.ndim(temperature) == 0 and np.ndim(alpha) == 0:
+            f = (
+                math.sqrt(x**2 + 2 * x * gamma)
+                * (x + gamma)
+                * (
+                    math.log1p(-self._safe_exp(alpha - x))
+                    + (alpha - x) / (self._safe_expm1(x - alpha))
+                )
             )
+            return (
+                -gc.GSL_CONST_CGSM_BOLTZMANN
+                * self._prefactor(temperature, power=3)
+                * f
+            )
+
+        y = alpha - x
+        y_array = np.asarray(y)
+        log_term = np.zeros_like(y_array, dtype=float)
+        valid = y_array < 0
+        if np.any(valid):
+            log_term[valid] = np.log1p(-np.exp(y_array[valid]))
+        with np.errstate(over="ignore"):
+            denom = np.expm1(x - alpha)
+        frac = np.divide(
+            alpha - x,
+            denom,
+            out=np.zeros_like(np.asarray(denom), dtype=float),
+            where=denom != 0,
         )
+        f = np.sqrt(x**2 + 2 * x * gamma) * (x + gamma) * (log_term + frac)
         return (
             -gc.GSL_CONST_CGSM_BOLTZMANN
             * self._prefactor(temperature, power=3)
@@ -299,11 +383,24 @@ class Boson(wbst.Particle):
         """
 
         gamma = self.get_gamma(temperature)
-        denom = self._safe_expm1(x - alpha)
-        if denom == 0:
-            return 0.0
-        nd_plus = x * (x + gamma) * math.sqrt(x**2 + 2 * x * gamma)
-        f = nd_plus / denom
+
+        if np.ndim(temperature) == 0 and np.ndim(alpha) == 0:
+            denom = self._safe_expm1(x - alpha)
+            if denom == 0:
+                return 0.0
+            nd_plus = x * (x + gamma) * math.sqrt(x**2 + 2 * x * gamma)
+            f = nd_plus / denom
+            return f * self._prefactor(temperature, power=4)
+
+        with np.errstate(over="ignore"):
+            denom = np.expm1(x - alpha)
+        numerator = x * (x + gamma) * np.sqrt(x**2 + 2 * x * gamma)
+        f = np.divide(
+            numerator,
+            denom,
+            out=np.zeros_like(numerator, dtype=float),
+            where=denom != 0,
+        )
         return f * self._prefactor(temperature, power=4)
 
     def compute_chemical_potential(self, temperature, number_density):
@@ -385,11 +482,23 @@ class Boson(wbst.Particle):
         )
 
 
-def create_photon():
+def create_photon(
+    workers=1,
+    integration_epsabs=wbst.DEFAULT_INTEGRATION_EPSABS,
+    integration_epsrel=wbst.DEFAULT_INTEGRATION_EPSREL,
+):
     """Convenience routine for creating a photon.
 
     Returns:
         A photon as a :obj:`wnstatmech.boson.Boson` object.
 
     """
-    return Boson("photon", 0, 2, 0)
+    return Boson(
+        "photon",
+        0,
+        2,
+        0,
+        workers=workers,
+        integration_epsabs=integration_epsabs,
+        integration_epsrel=integration_epsrel,
+    )

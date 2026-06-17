@@ -8,8 +8,8 @@ exclude = ["tutorial*"]
 
 [project]
 name = "wnstatmech"
-version = "1.0.4"
-dependencies = ["scipy", "numpy", "gslconsts"]
+version = "1.1.0"
+dependencies = ["scipy>=1.15", "numpy", "gslconsts"]
 requires-python = ">=3.10"
 authors = [
   {name = "Bradley S. Meyer", email = "mbradle@g.clemson.edu"},
@@ -42,3 +42,31 @@ Repository = "https://github.com/mbradle/wnstatmech.git"
 [project.gui-scripts]
 
 [project.entry-points."spam.magical"]
+
+
+[tool.pylint.basic]
+good-names = [
+  "i",
+  "j",
+  "k",
+  "ex",
+  "Run",
+  "_",
+  "f",
+  "x",
+  "y",
+  "x0",
+  "x1",
+  "x2",
+  "f1",
+  "f2",
+]
+
+[tool.pylint.design]
+max-args = 8
+max-attributes = 12
+max-locals = 24
+min-public-methods = 1
+
+[tool.pylint."messages control"]
+disable = ["duplicate-code"]

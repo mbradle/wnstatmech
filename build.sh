@@ -1,13 +1,12 @@
+#!/usr/bin/env bash
 # Script to automate build for PyPI.
 
-rm -fr dist
-cd wnstatmech
-black --line-length=79 *.py
-pylint *.py
+set -euo pipefail
 
-cd ../.github/workflows/
-pytest
-cd ../..
+rm -fr dist
+python -m black --line-length=79 wnstatmech
+python -m pylint wnstatmech
+python -m pytest .github/workflows/wnstatmech_test.py
 
 python -m pip install --upgrade build
 python -m build

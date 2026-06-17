@@ -2,29 +2,86 @@
 
 import math
 import numpy as np
-from scipy.integrate import quad
+from scipy.integrate import quad, quad_vec
 from scipy.optimize import brentq
-from scipy.differentiate import derivative
+import scipy.optimize.elementwise as optel
 import gslconsts as gc
 
+DEFAULT_INTEGRATION_EPSABS = 0.0
+DEFAULT_INTEGRATION_EPSREL = 1.0e-6
+DEFAULT_TEMPERATURE_DERIVATIVE_REL_STEP = 1.0e-4
+DEFAULT_ALPHA_DERIVATIVE_REL_STEP = 1.0e-4
+DEFAULT_CHEMICAL_POTENTIAL_WARM_START_FACTOR = 10.0
 
-def _bracket_root(f, x0, args=()):
+
+def _is_nearby_positive(value, reference, factor):
+    if value <= 0 or reference <= 0:
+        return value == reference
+    ratio = value / reference
+    return 1.0 / factor <= ratio <= factor
+
+
+def _to_scalar_or_array(value):
+    array = np.asarray(value)
+    if array.shape == ():
+        return array.item()
+    return value
+
+
+def _bracket_root_scalar(f, x0):
     factor = 1.6
     max_iter = 1000
     x1 = x0
-    x2 = x1 + 1
-    f1 = f(x1, *args)
-    f2 = f(x2, *args)
+    x2 = x1 + 1.0
+    f1 = f(x1)
+    if f1 == 0:
+        return x1, x1
+    f2 = f(x2)
+    if f2 == 0:
+        return x2, x2
+
     for _ in range(max_iter):
         if f1 * f2 < 0:
-            return (x1, x2)
+            return x1, x2
         if abs(f1) < abs(f2):
             x1 += factor * (x1 - x2)
-            f1 = f(x1, *args)
+            f1 = f(x1)
+            if f1 == 0:
+                return x1, x1
         else:
             x2 += factor * (x2 - x1)
-            f2 = f(x2, *args)
-    return None
+            f2 = f(x2)
+            if f2 == 0:
+                return x2, x2
+
+    raise RuntimeError("Unable to bracket chemical potential root.")
+
+
+class _VectorIntegrand:
+    def __init__(self, integrand_fn, temperatures, alphas):
+        self.integrand_fn = integrand_fn
+        self.temperatures = np.asarray(temperatures, dtype=float).ravel()
+        self.alphas = np.asarray(alphas, dtype=float).ravel()
+
+    def __call__(self, x):
+        try:
+            result = np.asarray(
+                self.integrand_fn(x, self.temperatures, self.alphas),
+                dtype=float,
+            )
+            if result.shape == self.temperatures.shape:
+                return result
+            if result.shape == ():
+                return np.full(self.temperatures.shape, result.item())
+        except (TypeError, ValueError):
+            pass
+
+        return np.array(
+            [
+                self.integrand_fn(x, temperature, alpha)
+                for temperature, alpha in zip(self.temperatures, self.alphas)
+            ]
+        )
 
 
 class Particle:
@@ -40,17 +97,40 @@ class Particle:
 
         ``charge`` (:obj:`int`):  The charge of the particle.
 
+        ``workers`` (:obj:`int`): The number of workers to use for integration.
+
+        ``integration_epsabs`` (:obj:`float`): Absolute integration tolerance.
+
+        ``integration_epsrel`` (:obj:`float`): Relative integration tolerance.
+
     """
 
-    def __init__(self, name, rest_mass_mev, multiplicity, charge):
+    def __init__(
+        self,
+        name,
+        rest_mass_mev,
+        multiplicity,
+        charge,
+        workers=1,
+        integration_epsabs=DEFAULT_INTEGRATION_EPSABS,
+        integration_epsrel=DEFAULT_INTEGRATION_EPSREL,
+    ):
         if rest_mass_mev < 0 or multiplicity <= 0:
             raise ValueError("Invalid rest mass or multiplicity.")
+        if integration_epsabs < 0 or integration_epsrel <= 0:
+            raise ValueError("Invalid integration tolerance.")
         self.name = name
         self.rest_mass = rest_mass_mev
         self.multiplicity = multiplicity
         self.charge = charge
+        self.workers = workers
+        self.integration_epsabs = integration_epsabs
+        self.integration_epsrel = integration_epsrel
         self.functions = {}
         self.integrands = {}
+        self._chemical_potential_cache = {}
+        self._chemical_potential_seed = {}
+        self._quantity_cache = {}
 
     def get_rest_mass_cgs(self):
         """A method to return the rest mass energy of the particle
@@ -123,68 +203,304 @@ class Particle:
     def _compute_chemical_potential(
         self, func, integrand_fn, temperature, number_density
     ):
-        def root_fn(alpha):
-            return (
-                self._compute_quantity(func, integrand_fn, temperature, alpha)
-                - number_density
+        if np.ndim(temperature) == 0 and np.ndim(number_density) == 0:
+            seed_key = (id(func), id(integrand_fn))
+            temperature = float(temperature)
+            number_density = float(number_density)
+            cache_key = (
+                id(func),
+                id(integrand_fn),
+                temperature,
+                number_density,
             )
-
-        lower, upper = _bracket_root(root_fn, -1)
-
-        return brentq(root_fn, lower, upper)
-
-    def _compute_degenerate_quantity(self, integrand_fn, temperature, alpha):
-        result = 0
-
-        if alpha <= 20:
-            tmp, _ = quad(
-                integrand_fn,
-                0.0,
-                np.inf,
-                args=(temperature, alpha),
-            )
-            result += tmp
-        else:
-            t_lims = [
-                (0, alpha - 20),
-                (alpha - 20, alpha - 10),
-                (alpha - 10, alpha),
-                (alpha, alpha + 10),
-                (alpha + 10, alpha + 20),
-                (alpha + 20, np.inf),
-            ]
-            for tup in t_lims:
-                res_tup = quad(
-                    integrand_fn,
-                    tup[0],
-                    tup[1],
-                    limit=1000,
-                    full_output=True,
-                    args=(temperature, alpha),
+            if cache_key in self._chemical_potential_cache:
+                result = self._chemical_potential_cache[cache_key]
+                self._chemical_potential_seed[seed_key] = (
+                    result,
+                    temperature,
+                    number_density,
                 )
-                result += res_tup[0]
+                return result
+
+            def root_fn_scalar(alpha):
+                return (
+                    self._compute_quantity_scalar(
+                        func, integrand_fn, temperature, alpha
+                    )
+                    - number_density
+                )
+
+            x0 = -1.0
+            seed = self._chemical_potential_seed.get(seed_key)
+            if seed is not None:
+                seed_alpha, seed_temperature, seed_number_density = seed
+                factor = DEFAULT_CHEMICAL_POTENTIAL_WARM_START_FACTOR
+                if _is_nearby_positive(
+                    temperature, seed_temperature, factor
+                ) and _is_nearby_positive(
+                    number_density, seed_number_density, factor
+                ):
+                    x0 = seed_alpha
+
+            lower, upper = _bracket_root_scalar(root_fn_scalar, x0)
+            if lower == upper:
+                result = lower
+            else:
+                result = brentq(root_fn_scalar, lower, upper)
+            self._chemical_potential_cache[cache_key] = result
+            self._chemical_potential_seed[seed_key] = (
+                result,
+                temperature,
+                number_density,
+            )
+            return result
+
+        def root_fn(alpha, temp, num_den):
+            return (
+                self._compute_quantity(func, integrand_fn, temp, alpha)
+                - num_den
+            )
+
+        args = (temperature, number_density)
+        bracket = optel.bracket_root(
+            root_fn,
+            -1.0,
+            args=args,
+            factor=1.6,
+            maxiter=1000,
+        )
+        if not np.all(bracket.success):
+            raise RuntimeError("Unable to bracket chemical potential root.")
+
+        result = optel.find_root(root_fn, bracket.bracket, args=args)
+        if not np.all(result.success):
+            raise RuntimeError("Unable to compute chemical potential root.")
+
+        return _to_scalar_or_array(result.x)
+
+    def _integrate(self, integrand_fn, lower, upper, temperature, alpha):
+        if self.workers == 1:
+            result, _ = quad(
+                integrand_fn,
+                lower,
+                upper,
+                args=(temperature, alpha),
+                epsabs=self.integration_epsabs,
+                epsrel=self.integration_epsrel,
+                limit=1000,
+            )
+            return result
+
+        result, _ = quad_vec(
+            integrand_fn,
+            lower,
+            upper,
+            args=(temperature, alpha),
+            epsabs=self.integration_epsabs,
+            epsrel=self.integration_epsrel,
+            workers=self.workers,
+        )
+        return result
+
+    def _integrate_batch(
+        self, integrand_fn, lower, upper, temperatures, alphas
+    ):
+        vector_integrand = _VectorIntegrand(integrand_fn, temperatures, alphas)
+        result, _ = quad_vec(
+            vector_integrand,
+            lower,
+            upper,
+            epsabs=self.integration_epsabs,
+            epsrel=self.integration_epsrel,
+            workers=self.workers,
+        )
+        result = np.asarray(result, dtype=float)
+        if result.shape == ():
+            result = np.full(vector_integrand.temperatures.shape, result)
+        return result.reshape(vector_integrand.temperatures.shape)
+
+    def _compute_degenerate_quantity_scalar(
+        self, integrand_fn, temperature, alpha
+    ):
+        result = 0
+        split_points = np.array(
+            [alpha - 20, alpha - 10, alpha, alpha + 10, alpha + 20],
+            dtype=float,
+        )
+        split_points = split_points[split_points > 0]
+        limits = np.concatenate(([0.0], np.unique(split_points), [np.inf]))
+
+        for lower, upper in zip(limits[:-1], limits[1:]):
+            if lower == upper:
+                continue
+            result += self._integrate(
+                integrand_fn,
+                lower,
+                upper,
+                temperature,
+                alpha,
+            )
 
         return result
 
-    def _compute_quantity(self, func, integrand_fn, temperature, alpha):
+    def _quantity_cache_key(self, integrand_fn, temperature, alpha):
+        return (
+            id(integrand_fn),
+            float(temperature),
+            float(alpha),
+            self.integration_epsabs,
+            self.integration_epsrel,
+        )
+
+    def _compute_quantity_scalar(self, func, integrand_fn, temperature, alpha):
+        temperature = float(temperature)
+        alpha = float(alpha)
+
         if func:
             result = func(temperature, alpha)
-            if result:
+            if result is not None:
                 return result
 
+        cache_key = self._quantity_cache_key(integrand_fn, temperature, alpha)
+        if cache_key in self._quantity_cache:
+            return self._quantity_cache[cache_key]
+
         if alpha <= 0:
-            result, _ = quad(
+            result = self._integrate(
                 integrand_fn,
                 0,
                 np.inf,
-                args=(temperature, alpha),
+                temperature,
+                alpha,
             )
         else:
-            result = self._compute_degenerate_quantity(
+            result = self._compute_degenerate_quantity_scalar(
                 integrand_fn, temperature, alpha
             )
 
+        self._quantity_cache[cache_key] = result
         return result
+
+    def _compute_quantity(self, func, integrand_fn, temperature, alpha):
+        temps, alphas = np.broadcast_arrays(
+            np.asarray(temperature, dtype=float),
+            np.asarray(alpha, dtype=float),
+        )
+        if temps.shape == ():
+            return self._compute_quantity_scalar(
+                func, integrand_fn, temps.item(), alphas.item()
+            )
+
+        result = np.empty(temps.size)
+        flat_temps = temps.ravel()
+        flat_alphas = alphas.ravel()
+        pending = np.ones(temps.size, dtype=bool)
+
+        if func:
+            for i, (temp, alpha_i) in enumerate(zip(flat_temps, flat_alphas)):
+                value = func(temp.item(), alpha_i.item())
+                if value is not None:
+                    result[i] = value
+                    pending[i] = False
+
+        pending_indices = np.nonzero(pending)[0]
+        if pending_indices.size:
+            regular = pending_indices[flat_alphas[pending_indices] <= 20]
+            if regular.size:
+                result[regular] = self._integrate_batch(
+                    integrand_fn,
+                    0.0,
+                    np.inf,
+                    flat_temps[regular],
+                    flat_alphas[regular],
+                )
+
+            degenerate = pending_indices[flat_alphas[pending_indices] > 20]
+            if degenerate.size:
+                degenerate_result = np.zeros(degenerate.size)
+                degenerate_alphas = flat_alphas[degenerate]
+                points = np.unique(
+                    np.concatenate(
+                        (
+                            degenerate_alphas - 20,
+                            degenerate_alphas - 10,
+                            degenerate_alphas,
+                            degenerate_alphas + 10,
+                            degenerate_alphas + 20,
+                        )
+                    )
+                )
+                points = points[points > 0]
+                limits = np.concatenate(([0.0], points, [np.inf]))
+                for lower, upper in zip(limits[:-1], limits[1:]):
+                    if lower == upper:
+                        continue
+                    degenerate_result += self._integrate_batch(
+                        integrand_fn,
+                        lower,
+                        upper,
+                        flat_temps[degenerate],
+                        degenerate_alphas,
+                    )
+                result[degenerate] = degenerate_result
+
+        return result.reshape(temps.shape)
+
+    def _partial_temperature_derivative(
+        self, func, integrand_fn, temperature, alpha
+    ):
+        step = DEFAULT_TEMPERATURE_DERIVATIVE_REL_STEP * np.asarray(
+            temperature, dtype=float
+        )
+        return (
+            self._compute_quantity(
+                func, integrand_fn, temperature + step, alpha
+            )
+            - self._compute_quantity(
+                func, integrand_fn, temperature - step, alpha
+            )
+        ) / (2.0 * step)
+
+    def _partial_alpha_derivative(
+        self, func, integrand_fn, temperature, alpha
+    ):
+        alpha_array = np.asarray(alpha, dtype=float)
+        step = DEFAULT_ALPHA_DERIVATIVE_REL_STEP * np.maximum(
+            1.0, np.abs(alpha_array)
+        )
+        return (
+            self._compute_quantity(
+                func, integrand_fn, temperature, alpha_array + step
+            )
+            - self._compute_quantity(
+                func, integrand_fn, temperature, alpha_array - step
+            )
+        ) / (2.0 * step)
+
+    def _compute_temperature_derivative_finite_difference(
+        self,
+        func_int_tuple,
+        temperature,
+        number_density,
+    ):
+        def quantity_at(temp):
+            alpha = self._compute_chemical_potential(
+                func_int_tuple[2],
+                func_int_tuple[3],
+                temp,
+                number_density,
+            )
+            return self._compute_quantity(
+                func_int_tuple[0], func_int_tuple[1], temp, alpha
+            )
+
+        temp_array = np.asarray(temperature, dtype=float)
+        step = DEFAULT_TEMPERATURE_DERIVATIVE_REL_STEP * temp_array
+        result = (
+            quantity_at(temp_array + step) - quantity_at(temp_array - step)
+        ) / (2.0 * step)
+
+        return _to_scalar_or_array(result)
 
     def _compute_temperature_derivative(
         self,
@@ -192,33 +508,61 @@ class Particle:
         temperature,
         number_density,
     ):
-        def deriv_func(temp):
-            if temp.ndim == 0:
-                alpha = self._compute_chemical_potential(
-                    func_int_tuple[2], func_int_tuple[3], temp, number_density
-                )
-                return self._compute_quantity(
-                    func_int_tuple[0], func_int_tuple[1], temp, alpha
-                )
+        temp_array, number_density_array = np.broadcast_arrays(
+            np.asarray(temperature, dtype=float),
+            np.asarray(number_density, dtype=float),
+        )
 
-            result = np.zeros((temp.shape[0], temp.shape[1]))
-            for i in range(temp.shape[1]):
-                alpha = self._compute_chemical_potential(
-                    func_int_tuple[2],
-                    func_int_tuple[3],
-                    temp[0, i],
-                    number_density,
-                )
-                result[0, i] = self._compute_quantity(
-                    func_int_tuple[0], func_int_tuple[1], temp[0, i], alpha
-                )
-            return result
+        alpha = self._compute_chemical_potential(
+            func_int_tuple[2],
+            func_int_tuple[3],
+            temp_array,
+            number_density_array,
+        )
+        alpha_array = np.asarray(alpha, dtype=float)
 
-        return derivative(
-            deriv_func,
-            temperature,
-            initial_step=1e-2 * temperature,
-        ).df
+        try:
+            number_t = self._partial_temperature_derivative(
+                func_int_tuple[2],
+                func_int_tuple[3],
+                temp_array,
+                alpha_array,
+            )
+            number_alpha = self._partial_alpha_derivative(
+                func_int_tuple[2],
+                func_int_tuple[3],
+                temp_array,
+                alpha_array,
+            )
+            quantity_t = self._partial_temperature_derivative(
+                func_int_tuple[0],
+                func_int_tuple[1],
+                temp_array,
+                alpha_array,
+            )
+            quantity_alpha = self._partial_alpha_derivative(
+                func_int_tuple[0],
+                func_int_tuple[1],
+                temp_array,
+                alpha_array,
+            )
+            result = quantity_t - quantity_alpha * number_t / number_alpha
+        except (
+            FloatingPointError,
+            RuntimeError,
+            ValueError,
+            ZeroDivisionError,
+        ):
+            return self._compute_temperature_derivative_finite_difference(
+                func_int_tuple, temperature, number_density
+            )
+
+        if not np.all(np.isfinite(result)):
+            return self._compute_temperature_derivative_finite_difference(
+                func_int_tuple, temperature, number_density
+            )
+
+        return _to_scalar_or_array(result)
 
     def update_function(self, quantity, func):
         """A method to update the functions for the particle.
@@ -236,6 +580,9 @@ class Particle:
         """
 
         self.functions[quantity] = func
+        self._chemical_potential_cache.clear()
+        self._chemical_potential_seed.clear()
+        self._quantity_cache.clear()
 
     def update_integrand(self, quantity, integrand_fn):
         """A method to update an integrand for the particle.
@@ -251,3 +598,6 @@ class Particle:
         """
 
         self.integrands[quantity] = integrand_fn
+        self._chemical_potential_cache.clear()
+        self._chemical_potential_seed.clear()
+        self._quantity_cache.clear()
