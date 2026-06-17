@@ -43,6 +43,9 @@ Repository = "https://github.com/mbradle/wnstatmech.git"
 
 [project.entry-points."spam.magical"]
 
+[tool.black]
+line-length = 79
+target-version = ["py310"]
 
 [tool.pylint.basic]
 good-names = [
@@ -64,6 +67,7 @@ good-names = [
 
 [tool.pylint.design]
 max-args = 8
+max-positional-arguments = 8
 max-attributes = 12
 max-locals = 24
 min-public-methods = 1

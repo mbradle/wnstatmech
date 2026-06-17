@@ -4,7 +4,7 @@
 set -euo pipefail
 
 rm -fr dist
-python -m black --line-length=79 wnstatmech
+black --line-length=79 wnstatmech
 python -m pylint wnstatmech
 python -m pytest .github/workflows/wnstatmech_test.py
 

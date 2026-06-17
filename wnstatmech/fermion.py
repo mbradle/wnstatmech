@@ -188,11 +188,7 @@ class Fermion(wbst.Particle):
                 )
             else:
                 part2 = math.log1p(self._safe_exp(-x - 2 * gamma - alpha))
-            f = (
-                math.sqrt(x**2 + 2 * x * gamma)
-                * (x + gamma)
-                * (part1 + part2)
-            )
+            f = math.sqrt(x**2 + 2 * x * gamma) * (x + gamma) * (part1 + part2)
             return f * self._prefactor(temperature, power=4)
 
         part1 = np.logaddexp(0.0, alpha - x)
