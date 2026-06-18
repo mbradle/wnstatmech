@@ -1,11 +1,4 @@
-import os
-import subprocess
-import sys
-import textwrap
-from pathlib import Path
-
 import pytest
-import requests, io
 import numpy as np
 import gslconsts.consts as gc
 import gslconsts.math as gm
@@ -109,7 +102,7 @@ def test_fermion_function():
     classical_neutron.update_function("pressure", my_func)
     P2 = classical_neutron.compute_quantity("pressure", T, alpha)
 
-    assert np.isclose(P1, P2, rtol = 1.0e-5)
+    assert np.isclose(P1, P2, rtol=1.0e-5)
 
 
 def fermion_pressure_integrand(x, T, alpha, self):
@@ -129,7 +122,8 @@ def fermion_pressure_integrand(x, T, alpha, self):
         * part2
         * kT
         * np.exp(alpha)
-        * np.sqrt(2. * x) * np.exp(-x)
+        * np.sqrt(2.0 * x)
+        * np.exp(-x)
         * np.power(gamma, 3.0 / 2.0)
     )
 
@@ -149,7 +143,7 @@ def test_fermion_integrand():
     classical_neutron.update_integrand("pressure", my_integrand)
     P2 = classical_neutron.compute_quantity("pressure", T, alpha)
 
-    assert np.isclose(P1, P2, rtol = 1.0e-5)
+    assert np.isclose(P1, P2, rtol=1.0e-5)
 
 
 def _assert_vectorized_quantity_matches_scalar(
@@ -213,47 +207,66 @@ def test_vectorized_chemical_potential_round_trip():
         "number density", temperatures, alphas
     )
 
-    roots = electron.compute_chemical_potential(
-        temperatures, number_densities
-    )
+    roots = electron.compute_chemical_potential(temperatures, number_densities)
 
     assert np.allclose(roots, alphas, atol=1.0e-5)
 
 
-def test_worker_integration_matches_scalar(tmp_path):
-    script = tmp_path / "worker_check.py"
-    script.write_text(
-        textwrap.dedent(
-            """
-            import numpy as np
-            import wnstatmech as ws
-
-            if __name__ == "__main__":
-                scalar = ws.fermion.create_electron().compute_quantity(
-                    "pressure", 1.0e9, -2.0
-                )
-                parallel = ws.fermion.create_electron(
-                    workers=2
-                ).compute_quantity("pressure", 1.0e9, -2.0)
-                print(np.isclose(scalar, parallel, rtol=1.0e-6, atol=0.0))
-            """
-        )
+def _configure_derivative_test_particle(particle):
+    particle.update_function(
+        "number density",
+        lambda temperature, alpha: temperature * np.exp(alpha),
     )
-    env = os.environ.copy()
-    repo_root = Path(__file__).resolve().parents[2]
-    env["PYTHONPATH"] = os.pathsep.join(
-        [str(repo_root), env.get("PYTHONPATH", "")]
+    particle.update_function(
+        "energy density",
+        lambda temperature, alpha: temperature**2 * np.exp(alpha),
+    )
+    particle.update_function(
+        "entropy density",
+        lambda temperature, alpha: temperature**3 * np.exp(alpha),
+    )
+    return particle
+
+
+def _assert_vectorized_derivative_matches_scalar(particle, quantity):
+    temperatures = np.array([1.0e7, 1.0e8, 1.0e9])
+    alphas = np.array([-2.0, -0.5, 1.0])
+    number_densities = particle.compute_quantity(
+        "number density", temperatures, alphas
     )
 
-    result = subprocess.run(
-        [sys.executable, str(script)],
-        check=True,
-        capture_output=True,
-        env=env,
-        text=True,
+    vector_result = np.asarray(
+        particle.compute_temperature_derivative(
+            quantity, temperatures, number_densities
+        ),
+        dtype=float,
+    )
+    scalar_result = np.asarray(
+        [
+            particle.compute_temperature_derivative(quantity, T, n_den)
+            for T, n_den in zip(temperatures, number_densities)
+        ],
+        dtype=float,
+    )
+    assert np.allclose(vector_result, scalar_result, rtol=1.0e-8, atol=0.0)
+
+
+def test_fermion_vectorized_derivatives_match_scalar():
+    particle = _configure_derivative_test_particle(
+        ws.fermion.Fermion("test fermion", 1.0, 2, 0)
     )
 
-    assert result.stdout.strip() == "True"
+    for quantity in ("energy density", "entropy density"):
+        _assert_vectorized_derivative_matches_scalar(particle, quantity)
+
+
+def test_boson_vectorized_derivatives_match_scalar():
+    particle = _configure_derivative_test_particle(
+        ws.boson.Boson("test boson", 1.0, 1, 0)
+    )
+
+    for quantity in ("energy density", "entropy density"):
+        _assert_vectorized_derivative_matches_scalar(particle, quantity)
 
 
 def test_zero_custom_function_result_is_used():
@@ -269,7 +282,6 @@ def test_invalid_integration_tolerances_raise():
 
     with pytest.raises(ValueError, match="Invalid integration tolerance"):
         ws.fermion.create_electron(integration_epsrel=0.0)
-
 
 
 def test_photon_quantities():

@@ -41,8 +41,6 @@ class Boson(wbst.Particle):
 
         ``charge`` (:obj:`int`):  The charge of the boson.
 
-        ``workers`` (:obj:`int`): The number of workers to use for integration.
-
         ``integration_epsabs`` (:obj:`float`): Absolute integration tolerance.
 
         ``integration_epsrel`` (:obj:`float`): Relative integration tolerance.
@@ -55,7 +53,6 @@ class Boson(wbst.Particle):
         rest_mass_mev,
         multiplicity,
         charge,
-        workers=1,
         integration_epsabs=wbst.DEFAULT_INTEGRATION_EPSABS,
         integration_epsrel=wbst.DEFAULT_INTEGRATION_EPSREL,
     ):
@@ -64,7 +61,6 @@ class Boson(wbst.Particle):
             rest_mass_mev,
             multiplicity,
             charge,
-            workers=workers,
             integration_epsabs=integration_epsabs,
             integration_epsrel=integration_epsrel,
         )
@@ -407,15 +403,15 @@ class Boson(wbst.Particle):
         """Routine to compute the chemical potential (less the rest mass) divided by kT.
 
         Args:
-            ``temperature`` (:obj:`float`): The temperature (in K) at which to compute the
-            chemical potential.
+            ``temperature`` (:obj:`float` or array-like): The temperature
+            (in K) at which to compute the chemical potential.
 
-            ``number_density`` (:obj:`float`):  The number density (in per cc) at which to
-            compute the chemical potential.
+            ``number_density`` (:obj:`float` or array-like):  The number
+            density (in per cc) at which to compute the chemical potential.
 
         Returns:
-            A :obj:`float` giving the chemical potential (less the rest mass) divided
-            by kT.
+            A :obj:`float` or :obj:`numpy.ndarray` giving the chemical
+            potential (less the rest mass) divided by kT.
 
         """
 
@@ -432,14 +428,16 @@ class Boson(wbst.Particle):
         Args:
             ``quantity`` (:obj:`str`): The name of the quantity to compute.
 
-            ``temperature`` (:obj:`float`): The temperature (in K) at which to compute the
+            ``temperature`` (:obj:`float` or array-like): The temperature
+            (in K) at which to compute the quantity.
+
+            ``alpha`` (:obj:`float` or array-like):  The chemical potential
+            (less the rest mass) divided by kT at which to compute the
             quantity.
 
-            ``alpha`` (:obj:`float`):  The chemical potential (less the rest mass)
-            divided by kT at which to compute the quantity.
-
         Returns:
-            A :obj:`float` giving the quantity in cgs units.
+            A :obj:`float` or :obj:`numpy.ndarray` giving the quantity in cgs
+            units.
 
         """
 
@@ -459,14 +457,15 @@ class Boson(wbst.Particle):
         Args:
             ``quantity`` (:obj:`str`): The name of the quantity to compute.
 
-            ``temperature`` (:obj:`float`): The temperature (in K) at which to compute the
-            derivative.
+            ``temperature`` (:obj:`float` or array-like): The temperature
+            (in K) at which to compute the derivative.
 
-            ``number_density`` (:obj:`float`):  The fixed number density at which to
-            compute the derivative.
+            ``number_density`` (:obj:`float` or array-like):  The fixed
+            number density at which to compute the derivative.
 
         Returns:
-            A :obj:`float` giving the temperature derivative of the quantity in cgs units.
+            A :obj:`float` or :obj:`numpy.ndarray` giving the temperature
+            derivative of the quantity in cgs units.
 
         """
 
@@ -483,7 +482,6 @@ class Boson(wbst.Particle):
 
 
 def create_photon(
-    workers=1,
     integration_epsabs=wbst.DEFAULT_INTEGRATION_EPSABS,
     integration_epsrel=wbst.DEFAULT_INTEGRATION_EPSREL,
 ):
@@ -498,7 +496,6 @@ def create_photon(
         0,
         2,
         0,
-        workers=workers,
         integration_epsabs=integration_epsabs,
         integration_epsrel=integration_epsrel,
     )

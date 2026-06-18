@@ -12,7 +12,7 @@ New:
   * Scalar chemical-potential solves now use a faster brentq-based path with
     caching and warm-starting from the previous scalar solve.
   * Quantity calculations support vectorized inputs and batched integration.
-  * Integration can use configurable workers and integration tolerances.
+  * Integration tolerances are configurable.
   * Temperature derivatives at fixed number density use a faster implicit
     derivative path with a finite-difference fallback.
 

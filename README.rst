@@ -20,20 +20,21 @@ typing in your favorite terminal::
 Performance controls
 --------------------
 
-Fermion and Boson objects accept optional ``workers``,
-``integration_epsabs``, and ``integration_epsrel`` arguments to control
-numerical integration performance and accuracy.  When using multiple workers
-in a script, create and use the particle inside a ``__main__`` guard::
+Fermion and Boson objects accept optional ``integration_epsabs`` and
+``integration_epsrel`` arguments to control numerical integration accuracy.
+For better throughput over many thermodynamic states, pass vectorized
+``temperature`` and ``alpha`` arrays to ``compute_quantity`` rather than
+calling it repeatedly in a Python loop::
 
     import wnstatmech as ws
+    import numpy as np
 
-    if __name__ == "__main__":
-        electron = ws.fermion.create_electron(
-            workers=4, integration_epsrel=1.0e-6
-        )
-        pressure = electron.compute_quantity("pressure", 1.0e9, -2.0)
+    electron = ws.fermion.create_electron(integration_epsrel=1.0e-6)
+    temperatures = np.geomspace(1.0e7, 1.0e10, 24)
+    alphas = np.linspace(-8.0, 8.0, 24)
+    pressures = electron.compute_quantity("pressure", temperatures, alphas)
 
-The call signatures remain backwards compatible with scalar usage.
+Scalar call signatures remain backwards compatible with 1.0.x usage.
 
 Authors
 -------

@@ -22,8 +22,6 @@ class Fermion(wbst.Particle):
 
         ``charge`` (:obj:`int`):  The charge of the fermion.
 
-        ``workers`` (:obj:`int`): The number of workers to use for integration.
-
         ``integration_epsabs`` (:obj:`float`): Absolute integration tolerance.
 
         ``integration_epsrel`` (:obj:`float`): Relative integration tolerance.
@@ -36,7 +34,6 @@ class Fermion(wbst.Particle):
         rest_mass_mev,
         multiplicity,
         charge,
-        workers=1,
         integration_epsabs=wbst.DEFAULT_INTEGRATION_EPSABS,
         integration_epsrel=wbst.DEFAULT_INTEGRATION_EPSREL,
     ):
@@ -45,7 +42,6 @@ class Fermion(wbst.Particle):
             rest_mass_mev,
             multiplicity,
             charge,
-            workers=workers,
             integration_epsabs=integration_epsabs,
             integration_epsrel=integration_epsrel,
         )
@@ -188,7 +184,11 @@ class Fermion(wbst.Particle):
                 )
             else:
                 part2 = math.log1p(self._safe_exp(-x - 2 * gamma - alpha))
-            f = math.sqrt(x**2 + 2 * x * gamma) * (x + gamma) * (part1 + part2)
+            f = (
+                math.sqrt(x**2 + 2 * x * gamma)
+                * (x + gamma)
+                * (part1 + part2)
+            )
             return f * self._prefactor(temperature, power=4)
 
         part1 = np.logaddexp(0.0, alpha - x)
@@ -322,15 +322,15 @@ class Fermion(wbst.Particle):
         """Routine to compute the chemical potential (less the rest mass) divided by kT.
 
         Args:
-            ``temperature`` (:obj:`float`): The temperature (in K) at which to compute the
-            chemical potential.
+            ``temperature`` (:obj:`float` or array-like): The temperature
+            (in K) at which to compute the chemical potential.
 
-            ``number_density`` (:obj:`float`):  The number density (in per cc) at which to
-            compute the chemical potential.
+            ``number_density`` (:obj:`float` or array-like):  The number
+            density (in per cc) at which to compute the chemical potential.
 
         Returns:
-            A :obj:`float` giving the chemical potential (less the rest mass) divided
-            by kT.
+            A :obj:`float` or :obj:`numpy.ndarray` giving the chemical
+            potential (less the rest mass) divided by kT.
 
         """
         return self._compute_chemical_potential(
@@ -346,15 +346,17 @@ class Fermion(wbst.Particle):
         Args:
             ``quantity`` (:obj:`str`): The name of the quantity to compute.
 
-            ``temperature`` (:obj:`float`): The temperature (in K) at which to compute the
+            ``temperature`` (:obj:`float` or array-like): The temperature
+            (in K) at which to compute the quantity.
+
+            ``alpha`` (:obj:`float` or array-like):  The chemical potential
+            (less the rest mass) divided by kT at which to compute the
             quantity.
 
-            ``alpha`` (:obj:`float`):  The chemical potential (less the rest mass)
-            divided by kT at which to compute the quantity.
-
         Returns:
-            A :obj:`float` giving the quantity in cgs units.  The routine will first try
-            to compute the quantity with a function, if set.  If the function is not
+            A :obj:`float` or :obj:`numpy.ndarray` giving the quantity in cgs
+            units.  The routine will first try to compute the quantity with a
+            function, if set.  If the function is not
             set for the quantity, or if the conditions in the function are not met by
             the input, the routine will integrate the associated integrand.
 
@@ -378,14 +380,15 @@ class Fermion(wbst.Particle):
         Args:
             ``quantity`` (:obj:`str`): The name of the quantity to compute.
 
-            ``temperature`` (:obj:`float`): The temperature (in K) at which to compute the
-            derivative.
+            ``temperature`` (:obj:`float` or array-like): The temperature
+            (in K) at which to compute the derivative.
 
-            ``number_density`` (:obj:`float`):  The fixed number density at which to compute
-            the derivative.
+            ``number_density`` (:obj:`float` or array-like):  The fixed
+            number density at which to compute the derivative.
 
         Returns:
-            A :obj:`float` giving the temperature derivative of the quantity in cgs units.
+            A :obj:`float` or :obj:`numpy.ndarray` giving the temperature
+            derivative of the quantity in cgs units.
 
         """
         assert (
@@ -404,7 +407,6 @@ class Fermion(wbst.Particle):
 
 
 def create_electron(
-    workers=1,
     integration_epsabs=wbst.DEFAULT_INTEGRATION_EPSABS,
     integration_epsrel=wbst.DEFAULT_INTEGRATION_EPSREL,
 ):
@@ -424,7 +426,6 @@ def create_electron(
         electron_mass,
         2,
         -1,
-        workers=workers,
         integration_epsabs=integration_epsabs,
         integration_epsrel=integration_epsrel,
     )

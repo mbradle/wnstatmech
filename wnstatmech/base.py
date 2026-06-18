@@ -97,8 +97,6 @@ class Particle:
 
         ``charge`` (:obj:`int`):  The charge of the particle.
 
-        ``workers`` (:obj:`int`): The number of workers to use for integration.
-
         ``integration_epsabs`` (:obj:`float`): Absolute integration tolerance.
 
         ``integration_epsrel`` (:obj:`float`): Relative integration tolerance.
@@ -111,7 +109,6 @@ class Particle:
         rest_mass_mev,
         multiplicity,
         charge,
-        workers=1,
         integration_epsabs=DEFAULT_INTEGRATION_EPSABS,
         integration_epsrel=DEFAULT_INTEGRATION_EPSREL,
     ):
@@ -123,7 +120,6 @@ class Particle:
         self.rest_mass = rest_mass_mev
         self.multiplicity = multiplicity
         self.charge = charge
-        self.workers = workers
         self.integration_epsabs = integration_epsabs
         self.integration_epsrel = integration_epsrel
         self.functions = {}
@@ -279,26 +275,14 @@ class Particle:
         return _to_scalar_or_array(result.x)
 
     def _integrate(self, integrand_fn, lower, upper, temperature, alpha):
-        if self.workers == 1:
-            result, _ = quad(
-                integrand_fn,
-                lower,
-                upper,
-                args=(temperature, alpha),
-                epsabs=self.integration_epsabs,
-                epsrel=self.integration_epsrel,
-                limit=1000,
-            )
-            return result
-
-        result, _ = quad_vec(
+        result, _ = quad(
             integrand_fn,
             lower,
             upper,
             args=(temperature, alpha),
             epsabs=self.integration_epsabs,
             epsrel=self.integration_epsrel,
-            workers=self.workers,
+            limit=1000,
         )
         return result
 
@@ -312,7 +296,6 @@ class Particle:
             upper,
             epsabs=self.integration_epsabs,
             epsrel=self.integration_epsrel,
-            workers=self.workers,
         )
         result = np.asarray(result, dtype=float)
         if result.shape == ():
