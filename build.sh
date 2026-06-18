@@ -19,7 +19,7 @@ echo ""
 grep version wnstatmech/__about__.py | grep -v ","
 grep version CITATION.cff | grep -v "cff-version"
 grep Version doc/source/changelog.rst | grep -v Versioning | head -1
-grep version pyproject.toml
+grep version pyproject.toml | grep -v target-version
 
 echo ""
 echo "Check the release date:"
