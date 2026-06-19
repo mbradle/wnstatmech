@@ -388,7 +388,7 @@ class Particle:
 
         pending_indices = np.nonzero(pending)[0]
         if pending_indices.size:
-            regular = pending_indices[flat_alphas[pending_indices] <= 20]
+            regular = pending_indices[flat_alphas[pending_indices] <= 0]
             if regular.size:
                 result[regular] = self._integrate_batch(
                     integrand_fn,
@@ -398,7 +398,7 @@ class Particle:
                     flat_alphas[regular],
                 )
 
-            degenerate = pending_indices[flat_alphas[pending_indices] > 20]
+            degenerate = pending_indices[flat_alphas[pending_indices] > 0]
             if degenerate.size:
                 degenerate_result = np.zeros(degenerate.size)
                 degenerate_alphas = flat_alphas[degenerate]

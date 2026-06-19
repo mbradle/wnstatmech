@@ -269,6 +269,44 @@ def test_boson_vectorized_derivatives_match_scalar():
         _assert_vectorized_derivative_matches_scalar(particle, quantity)
 
 
+def test_vectorized_derivative_is_independent_of_batch_composition():
+    electron = ws.fermion.create_electron()
+    number_density = 1.0e23
+    temperatures = np.array(
+        [
+            1.0e3,
+            1.5e3,
+            2.0e3,
+            3.0e3,
+            4.0e3,
+            4.5e3,
+            4.66e3,
+            5.05e3,
+            5.48e3,
+            6.0e3,
+            1.0e4,
+            1.0e5,
+            1.0e6,
+            1.0e8,
+            1.0e10,
+        ]
+    )
+
+    full_batch = electron.compute_temperature_derivative(
+        "energy density", temperatures, number_density
+    )
+    chunked = np.concatenate(
+        [
+            electron.compute_temperature_derivative(
+                "energy density", chunk, number_density
+            )
+            for chunk in np.array_split(temperatures, 3)
+        ]
+    )
+
+    assert np.allclose(full_batch, chunked, rtol=5.0e-4, atol=0.0)
+
+
 def test_zero_custom_function_result_is_used():
     neutron = ws.fermion.Fermion("neutron", 939.55, 2, 0)
     neutron.update_function("pressure", lambda T, alpha: 0.0)
