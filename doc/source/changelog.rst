@@ -14,6 +14,7 @@ New:
     batched, and derivative thermodynamics workloads.
   * A direct chemical-potential callback can provide alpha or request the
     existing numerical fallback for each state.
+  * Contribution and support guidelines are now documented.
   * Scalar exact-result caches now use a bounded least-recently-used policy.
     Cache size is configurable and cached state can be cleared explicitly.
 

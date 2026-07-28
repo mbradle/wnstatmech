@@ -73,6 +73,7 @@ Contribute
 
 - Issue Tracker: `<https://github.com/mbradle/wnstatmech/issues/>`_
 - Source Code: `<https://github.com/mbradle/wnstatmech/>`_
+- `Contributing guide <https://github.com/mbradle/wnstatmech/blob/main/CONTRIBUTING.md>`_
 
 License
 -------
