@@ -10,7 +10,7 @@ exclude = ["tutorial*"]
 name = "wnstatmech"
 version = "1.2.0"
 dependencies = ["scipy>=1.15", "numpy", "gslconsts"]
-requires-python = ">=3.12"
+requires-python = ">=3.10"
 authors = [
   {name = "Bradley S. Meyer", email = "mbradle@g.clemson.edu"},
   {name = "Lucas S. Walls", email = "lwalls@g.clemson.edu"},
@@ -27,7 +27,12 @@ classifiers = [
   "Development Status :: 5 - Production/Stable",
   "Intended Audience :: Science/Research",
   "Topic :: Scientific/Engineering :: Astronomy",
-  "Programming Language :: Python :: 3"
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14"
 ]
 
 [project.optional-dependencies]

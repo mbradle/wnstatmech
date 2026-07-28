@@ -21,6 +21,8 @@ Improve:
 
   * Vectorized degenerate fermion calculations now use small alpha-sorted
     batches instead of a single global integration grid.
+  * Python 3.10 and newer are now explicitly supported, with CI coverage
+    configured for Python 3.10 through 3.14.
 
 Version 1.1.1
 -------------
