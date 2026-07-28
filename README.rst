@@ -31,6 +31,7 @@ function that accepts scalar temperature and number-density values and returns
 ``alpha`` or ``None`` to use the numerical fallback::
 
     electron.update_chemical_potential_function(my_direct_alpha)
+
 For better throughput over many thermodynamic states, pass vectorized
 ``temperature`` and ``alpha`` arrays to ``compute_quantity`` rather than
 calling it repeatedly in a Python loop::
