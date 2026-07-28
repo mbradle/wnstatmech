@@ -23,6 +23,8 @@ Improve:
     batches instead of a single global integration grid.
   * Python 3.10 and newer are now explicitly supported, with CI coverage
     configured for Python 3.10 through 3.14.
+  * The tutorial now demonstrates a direct chemical-potential approximation
+    with numerical fallback and corrects its classical-neutron examples.
 
 Version 1.1.1
 -------------
