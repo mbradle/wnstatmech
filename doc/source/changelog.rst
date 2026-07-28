@@ -4,6 +4,24 @@ Changelog
 All notable changes to this project will be documented in this file.  This
 project adheres to `Semantic Versioning <http://semver.org/spec/v2.0.0.html>`_.
 
+Version 1.2.0
+-------------
+
+New:
+
+  * The test suite now resides in a top-level ``tests`` directory.
+  * Optional ``pytest-benchmark`` benchmarks cover representative scalar,
+    batched, and derivative thermodynamics workloads.
+  * A direct chemical-potential callback can provide alpha or request the
+    existing numerical fallback for each state.
+  * Scalar exact-result caches now use a bounded least-recently-used policy.
+    Cache size is configurable and cached state can be cleared explicitly.
+
+Improve:
+
+  * Vectorized degenerate fermion calculations now use small alpha-sorted
+    batches instead of a single global integration grid.
+
 Version 1.1.1
 -------------
 
@@ -68,4 +86,3 @@ Version 1.0.0
 New:
 
   * Initial release.
-

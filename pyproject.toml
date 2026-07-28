@@ -8,7 +8,7 @@ exclude = ["tutorial*"]
 
 [project]
 name = "wnstatmech"
-version = "1.1.1"
+version = "1.2.0"
 dependencies = ["scipy>=1.15", "numpy", "gslconsts"]
 requires-python = ">=3.12"
 authors = [
@@ -31,6 +31,7 @@ classifiers = [
 ]
 
 [project.optional-dependencies]
+benchmark = ["pytest-benchmark>=5.1"]
 
 [project.urls]
 Documentation = "https://wnstatmech.readthedocs.org"
@@ -46,6 +47,9 @@ Repository = "https://github.com/mbradle/wnstatmech.git"
 [tool.black]
 line-length = 79
 target-version = ["py310"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
 
 [tool.pylint.basic]
 good-names = [
@@ -68,7 +72,7 @@ good-names = [
 [tool.pylint.design]
 max-args = 8
 max-positional-arguments = 8
-max-attributes = 12
+max-attributes = 13
 max-locals = 24
 min-public-methods = 1
 

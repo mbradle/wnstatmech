@@ -26,6 +26,9 @@ class Fermion(wbst.Particle):
 
         ``integration_epsrel`` (:obj:`float`): Relative integration tolerance.
 
+        ``cache_size`` (:obj:`int`): Maximum number of exact scalar results
+        retained for each cache.  Set to zero to disable exact-result caching.
+
     """
 
     def __init__(
@@ -36,6 +39,7 @@ class Fermion(wbst.Particle):
         charge,
         integration_epsabs=wbst.DEFAULT_INTEGRATION_EPSABS,
         integration_epsrel=wbst.DEFAULT_INTEGRATION_EPSREL,
+        cache_size=wbst.DEFAULT_CACHE_SIZE,
     ):
         super().__init__(
             name,
@@ -44,6 +48,7 @@ class Fermion(wbst.Particle):
             charge,
             integration_epsabs=integration_epsabs,
             integration_epsrel=integration_epsrel,
+            cache_size=cache_size,
         )
 
         self.update_function(
@@ -405,6 +410,7 @@ class Fermion(wbst.Particle):
 def create_electron(
     integration_epsabs=wbst.DEFAULT_INTEGRATION_EPSABS,
     integration_epsrel=wbst.DEFAULT_INTEGRATION_EPSREL,
+    cache_size=wbst.DEFAULT_CACHE_SIZE,
 ):
     """Convenience routine for creating an electron.
 
@@ -424,4 +430,5 @@ def create_electron(
         -1,
         integration_epsabs=integration_epsabs,
         integration_epsrel=integration_epsrel,
+        cache_size=cache_size,
     )

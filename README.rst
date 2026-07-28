@@ -22,6 +22,15 @@ Performance controls
 
 Fermion and Boson objects accept optional ``integration_epsabs`` and
 ``integration_epsrel`` arguments to control numerical integration accuracy.
+Their scalar exact-result caches retain 1,024 entries by default; pass
+``cache_size=0`` to disable them or call ``clear_cache()`` to clear a
+particle's cached values and chemical-potential warm start.
+
+For an application-specific direct inversion, install a chemical-potential
+function that accepts scalar temperature and number-density values and returns
+``alpha`` or ``None`` to use the numerical fallback::
+
+    electron.update_chemical_potential_function(my_direct_alpha)
 For better throughput over many thermodynamic states, pass vectorized
 ``temperature`` and ``alpha`` arrays to ``compute_quantity`` rather than
 calling it repeatedly in a Python loop::
@@ -35,6 +44,22 @@ calling it repeatedly in a Python loop::
     pressures = electron.compute_quantity("pressure", temperatures, alphas)
 
 Scalar call signatures remain backwards compatible with 1.0.x usage.
+
+Performance benchmarks
+----------------------
+
+Optional benchmarks measure representative scalar, batched, and
+fixed-density derivative workloads.  They are separate from the correctness
+tests and are not run by the normal build.  Install the benchmark extra and
+run them with::
+
+    $ pip install -e '.[benchmark]'
+    $ pytest benchmarks --benchmark-only
+
+Benchmark results are most useful when compared before and after a change on
+the same machine.  The benchmark cases intentionally create a fresh particle
+for scalar calls so that they measure a cold numerical solve rather than a
+cache hit.
 
 Authors
 -------

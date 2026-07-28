@@ -1,6 +1,7 @@
 """This is the base module for the package."""
 
 import math
+from collections import OrderedDict
 import numpy as np
 from scipy.integrate import quad, quad_vec
 from scipy.optimize import brentq
@@ -12,6 +13,8 @@ DEFAULT_INTEGRATION_EPSREL = 1.0e-6
 DEFAULT_TEMPERATURE_DERIVATIVE_REL_STEP = 1.0e-4
 DEFAULT_ALPHA_DERIVATIVE_REL_STEP = 1.0e-4
 DEFAULT_CHEMICAL_POTENTIAL_WARM_START_FACTOR = 10.0
+DEFAULT_CACHE_SIZE = 1024
+DEGENERATE_BATCH_SIZE = 32
 
 
 def _is_nearby_positive(value, reference, factor):
@@ -101,6 +104,9 @@ class Particle:
 
         ``integration_epsrel`` (:obj:`float`): Relative integration tolerance.
 
+        ``cache_size`` (:obj:`int`): Maximum number of exact scalar results
+        retained for each cache.  Set to zero to disable exact-result caching.
+
     """
 
     def __init__(
@@ -111,22 +117,27 @@ class Particle:
         charge,
         integration_epsabs=DEFAULT_INTEGRATION_EPSABS,
         integration_epsrel=DEFAULT_INTEGRATION_EPSREL,
+        cache_size=DEFAULT_CACHE_SIZE,
     ):
         if rest_mass_mev < 0 or multiplicity <= 0:
             raise ValueError("Invalid rest mass or multiplicity.")
         if integration_epsabs < 0 or integration_epsrel <= 0:
             raise ValueError("Invalid integration tolerance.")
+        if not isinstance(cache_size, int) or cache_size < 0:
+            raise ValueError("Invalid cache size.")
         self.name = name
         self.rest_mass = rest_mass_mev
         self.multiplicity = multiplicity
         self.charge = charge
         self.integration_epsabs = integration_epsabs
         self.integration_epsrel = integration_epsrel
+        self.cache_size = cache_size
         self.functions = {}
         self.integrands = {}
-        self._chemical_potential_cache = {}
+        self.chemical_potential_function = None
+        self._chemical_potential_cache = OrderedDict()
         self._chemical_potential_seed = {}
-        self._quantity_cache = {}
+        self._quantity_cache = OrderedDict()
 
     def get_rest_mass_cgs(self):
         """A method to return the rest mass energy of the particle
@@ -196,7 +207,84 @@ class Particle:
         except OverflowError:
             return float("inf")
 
+    def _cache_get(self, cache, key):
+        try:
+            value = cache.pop(key)
+        except KeyError:
+            return None
+        cache[key] = value
+        return value
+
+    def _cache_set(self, cache, key, value):
+        if self.cache_size == 0:
+            return
+        cache[key] = value
+        cache.move_to_end(key)
+        if len(cache) > self.cache_size:
+            cache.popitem(last=False)
+
+    def clear_cache(self):
+        """Clear exact-result caches and the chemical-potential warm start."""
+        self._chemical_potential_cache.clear()
+        self._chemical_potential_seed.clear()
+        self._quantity_cache.clear()
+
     def _compute_chemical_potential(
+        self, func, integrand_fn, temperature, number_density
+    ):
+        temperatures, number_densities = np.broadcast_arrays(
+            np.asarray(temperature, dtype=float),
+            np.asarray(number_density, dtype=float),
+        )
+        if temperatures.shape == ():
+            direct_alpha = self._compute_direct_chemical_potential(
+                temperatures.item(), number_densities.item()
+            )
+            if direct_alpha is not None:
+                return direct_alpha
+            return self._compute_chemical_potential_numerical(
+                func,
+                integrand_fn,
+                temperatures.item(),
+                number_densities.item(),
+            )
+
+        result = np.empty(temperatures.size)
+        flat_temperatures = temperatures.ravel()
+        flat_number_densities = number_densities.ravel()
+        pending = np.ones(temperatures.size, dtype=bool)
+
+        if self.chemical_potential_function is not None:
+            for i, (temp, num_den) in enumerate(
+                zip(flat_temperatures, flat_number_densities)
+            ):
+                direct_alpha = self._compute_direct_chemical_potential(
+                    temp.item(), num_den.item()
+                )
+                if direct_alpha is not None:
+                    result[i] = direct_alpha
+                    pending[i] = False
+
+        pending_indices = np.nonzero(pending)[0]
+        if pending_indices.size:
+            result[pending_indices] = np.asarray(
+                self._compute_chemical_potential_numerical(
+                    func,
+                    integrand_fn,
+                    flat_temperatures[pending_indices],
+                    flat_number_densities[pending_indices],
+                ),
+                dtype=float,
+            ).ravel()
+
+        return _to_scalar_or_array(result.reshape(temperatures.shape))
+
+    def _compute_direct_chemical_potential(self, temperature, number_density):
+        if self.chemical_potential_function is None:
+            return None
+        return self.chemical_potential_function(temperature, number_density)
+
+    def _compute_chemical_potential_numerical(
         self, func, integrand_fn, temperature, number_density
     ):
         if np.ndim(temperature) == 0 and np.ndim(number_density) == 0:
@@ -209,8 +297,8 @@ class Particle:
                 temperature,
                 number_density,
             )
-            if cache_key in self._chemical_potential_cache:
-                result = self._chemical_potential_cache[cache_key]
+            result = self._cache_get(self._chemical_potential_cache, cache_key)
+            if result is not None:
                 self._chemical_potential_seed[seed_key] = (
                     result,
                     temperature,
@@ -243,7 +331,7 @@ class Particle:
                 result = lower
             else:
                 result = brentq(root_fn_scalar, lower, upper)
-            self._chemical_potential_cache[cache_key] = result
+            self._cache_set(self._chemical_potential_cache, cache_key, result)
             self._chemical_potential_seed[seed_key] = (
                 result,
                 temperature,
@@ -326,6 +414,44 @@ class Particle:
 
         return result
 
+    def _compute_degenerate_quantity_batch(
+        self, integrand_fn, result, indices, temperatures, alphas
+    ):
+        """Compute positive-alpha states in small, similarly valued batches."""
+        sorted_indices = indices[np.argsort(alphas[indices])]
+
+        for start in range(0, sorted_indices.size, DEGENERATE_BATCH_SIZE):
+            batch_indices = sorted_indices[
+                start : start + DEGENERATE_BATCH_SIZE
+            ]
+            batch_alphas = alphas[batch_indices]
+            batch_result = np.zeros(batch_indices.size)
+            points = np.unique(
+                np.concatenate(
+                    (
+                        batch_alphas - 20,
+                        batch_alphas - 10,
+                        batch_alphas,
+                        batch_alphas + 10,
+                        batch_alphas + 20,
+                    )
+                )
+            )
+            points = points[points > 0]
+            limits = np.concatenate(([0.0], points, [np.inf]))
+
+            for lower, upper in zip(limits[:-1], limits[1:]):
+                if lower == upper:
+                    continue
+                batch_result += self._integrate_batch(
+                    integrand_fn,
+                    lower,
+                    upper,
+                    temperatures[batch_indices],
+                    batch_alphas,
+                )
+            result[batch_indices] = batch_result
+
     def _quantity_cache_key(self, integrand_fn, temperature, alpha):
         return (
             id(integrand_fn),
@@ -345,8 +471,9 @@ class Particle:
                 return result
 
         cache_key = self._quantity_cache_key(integrand_fn, temperature, alpha)
-        if cache_key in self._quantity_cache:
-            return self._quantity_cache[cache_key]
+        result = self._cache_get(self._quantity_cache, cache_key)
+        if result is not None:
+            return result
 
         if alpha <= 0:
             result = self._integrate(
@@ -361,7 +488,7 @@ class Particle:
                 integrand_fn, temperature, alpha
             )
 
-        self._quantity_cache[cache_key] = result
+        self._cache_set(self._quantity_cache, cache_key, result)
         return result
 
     def _compute_quantity(self, func, integrand_fn, temperature, alpha):
@@ -400,32 +527,13 @@ class Particle:
 
             degenerate = pending_indices[flat_alphas[pending_indices] > 0]
             if degenerate.size:
-                degenerate_result = np.zeros(degenerate.size)
-                degenerate_alphas = flat_alphas[degenerate]
-                points = np.unique(
-                    np.concatenate(
-                        (
-                            degenerate_alphas - 20,
-                            degenerate_alphas - 10,
-                            degenerate_alphas,
-                            degenerate_alphas + 10,
-                            degenerate_alphas + 20,
-                        )
-                    )
+                self._compute_degenerate_quantity_batch(
+                    integrand_fn,
+                    result,
+                    degenerate,
+                    flat_temps,
+                    flat_alphas,
                 )
-                points = points[points > 0]
-                limits = np.concatenate(([0.0], points, [np.inf]))
-                for lower, upper in zip(limits[:-1], limits[1:]):
-                    if lower == upper:
-                        continue
-                    degenerate_result += self._integrate_batch(
-                        integrand_fn,
-                        lower,
-                        upper,
-                        flat_temps[degenerate],
-                        degenerate_alphas,
-                    )
-                result[degenerate] = degenerate_result
 
         return result.reshape(temps.shape)
 
@@ -563,9 +671,20 @@ class Particle:
         """
 
         self.functions[quantity] = func
-        self._chemical_potential_cache.clear()
-        self._chemical_potential_seed.clear()
-        self._quantity_cache.clear()
+        self.clear_cache()
+
+    def update_chemical_potential_function(self, func):
+        """Set a direct chemical-potential function or ``None``.
+
+        The function receives scalar ``(temperature, number_density)`` values
+        in K and cm^-3 and returns alpha, the chemical potential less rest
+        mass divided by kT.  Return ``None`` when the direct calculation does
+        not apply; wnstatmech will then use its numerical root solve.  Array
+        inputs are dispatched to the function one state at a time, allowing
+        direct and numerical results in the same batch.
+        """
+        self.chemical_potential_function = func
+        self.clear_cache()
 
     def update_integrand(self, quantity, integrand_fn):
         """A method to update an integrand for the particle.
@@ -581,6 +700,4 @@ class Particle:
         """
 
         self.integrands[quantity] = integrand_fn
-        self._chemical_potential_cache.clear()
-        self._chemical_potential_seed.clear()
-        self._quantity_cache.clear()
+        self.clear_cache()

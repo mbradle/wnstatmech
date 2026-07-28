@@ -6,7 +6,7 @@ set -euo pipefail
 rm -fr dist
 black --line-length=79 wnstatmech
 python -m pylint wnstatmech
-python -m pytest .github/workflows/wnstatmech_test.py
+python -m pytest tests
 
 python -m pip install --upgrade build
 python -m build
